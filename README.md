@@ -1,0 +1,1 @@
+# idlecraft-mod-fabric
