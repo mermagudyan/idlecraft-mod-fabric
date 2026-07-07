@@ -1,11 +1,14 @@
 package io.github.mermagudyan.idlecraft.network;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ClientState {
     private static int points = 0;
     private static List<String> unlockedNodes = new ArrayList<>();
+    private static Map<String, Integer> conditionProgress = new HashMap<>();
 
     public static int getPoints() { return points; }
     public static void setPoints(int p) { points = p; }
@@ -16,4 +19,7 @@ public class ClientState {
     public static void addUnlocked(String nodeId) {
         if (!unlockedNodes.contains(nodeId)) unlockedNodes.add(nodeId);
     }
+
+    public static int getProgress(String nodeId) { return conditionProgress.getOrDefault(nodeId, 0); }
+    public static void setConditionProgress(Map<String, Integer> p) { conditionProgress = new HashMap<>(p); }
 }

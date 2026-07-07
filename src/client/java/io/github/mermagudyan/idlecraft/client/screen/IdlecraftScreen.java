@@ -12,7 +12,7 @@ import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
 import io.github.mermagudyan.idlecraft.client.debug.DebugState;
 import io.github.mermagudyan.idlecraft.network.ClientState;
-import io.github.mermagudyan.idlecraft.network.ClientState;
+
 import io.github.mermagudyan.idlecraft.network.NodePurchasePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import java.util.List;
@@ -20,6 +20,11 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class IdlecraftScreen extends Screen {
+
+    private float expandProgress = 0.0f;
+    private boolean prevCtrlHeld = false;
+    private boolean prevHovering = false;
+    private float expandLinear = 0.0f; // линейный прогресс 0..1
 
     private static final float WORLD_HALF = 5000.0f;
     private static final float MIN_ZOOM = 0.2f;
@@ -82,7 +87,19 @@ public class IdlecraftScreen extends Screen {
         boolean debug = DebugState.isAvailable(this.client != null ? this.client.player : null);
 
         int yPrestige = debug ? this.height - 50 : this.height - 25;
-
+        if (debug) {
+            this.addDrawableChild(ButtonWidget.builder(
+                    Text.literal("Reset Idlecraft").formatted(Formatting.RED),
+                    b -> {
+                        if (this.client != null && this.client.player != null
+                                && this.client.player.networkHandler != null) {
+                            this.client.player.networkHandler.sendChatCommand("idlecraft reset");
+                            this.client.player.sendMessage(
+                                    Text.literal("[Idlecraft] Progress reset."), false);
+                        }
+                    }
+            ).dimensions(this.width / 2 - 75, this.height - 25, 150, 20).build());
+        }
         this.addDrawableChild(ButtonWidget.builder(
                 Text.literal("Prestige").formatted(Formatting.GOLD),
                 b -> this.client.setScreen(new PrestigeConfirmScreen(this))
@@ -95,14 +112,6 @@ public class IdlecraftScreen extends Screen {
 
     }
 
-    private void resetAll() {
-        for (SkillNode n : nodes.values()) n.unlocked = false;
-        lastUnlockedNode = null;
-        flashNode = null;
-        flashTime = 0;
-        ClientState.setPoints(0);
-    }
-
     // ---------- Helpers ----------
     private boolean canUnlock(SkillNode n) {
         if (n.unlocked) return false;
@@ -111,16 +120,51 @@ public class IdlecraftScreen extends Screen {
             SkillNode p = nodes.get(n.parentId);
             if (p == null || !p.unlocked) return false;
         }
+        // Клиентская проверка условий
+        if (!isConditionMet(n)) return false;
+        return true;
+    }
+
+    private boolean isConditionMet(SkillNode n) {
+        if (n.conditionText == null || n.conditionText.isEmpty()) return true;
+        if (n.unlocked) return true;
+
+        if ("wood_1".equals(n.id)) {
+            return ClientState.getProgress("wood_1") >= 5;
+        }
+        if ("stone_1".equals(n.id)) {
+            return areLastNodesOfTopBranchUnlocked();
+        }
+        return true;
+    }
+
+    // Проверка: все последние ноды верхней ветки (Y < 0) разблокированы
+    private boolean areLastNodesOfTopBranchUnlocked() {
+        for (SkillNode n : nodes.values()) {
+            if (n.y >= 0) continue; // только верхняя ветка
+            if (n.parentId == null) continue;
+            // Проверяем, есть ли у этой ноды дочерние ноды
+            boolean hasChildren = false;
+            for (SkillNode other : nodes.values()) {
+                if (n.id.equals(other.parentId)) {
+                    hasChildren = true;
+                    break;
+                }
+            }
+            // Если дочерних нет — это "последняя нода"
+            if (!hasChildren && !n.unlocked) {
+                return false;
+            }
+        }
         return true;
     }
 
     private void unlockNode(SkillNode n) {
-        n.unlocked = true;
-        ClientState.addUnlocked(n.id);
+        // НЕ меняем локальное состояние — ждём подтверждения от сервера
         lastUnlockedNode = n;
         flashNode = n;
         flashTime = 1.0f;
-        // Отправляем пакет на сервер для синхронизации и сохранения
+        // Отправляем пакет на сервер
         ClientPlayNetworking.send(new NodePurchasePayload(n.id));
     }
 
@@ -223,16 +267,32 @@ public class IdlecraftScreen extends Screen {
         cameraY = MathHelper.clamp(cameraY, -WORLD_HALF, WORLD_HALF);
     }
 
+
+
     // ---------- Tick ----------
     @Override
     public void tick() {
+        // WASD движение камеры
         float baseSpeed = 6.0f;
         float speed = (keys[4] ? baseSpeed * 3.0f : baseSpeed) / zoom;
         if (keys[0]) cameraY -= speed;
         if (keys[2]) cameraY += speed;
         if (keys[1]) cameraX -= speed;
         if (keys[3]) cameraX += speed;
-        clampCamera();
+        clampCamera();   // ← ПЕРВЫЙ clampCamera (для камеры)
+
+        // Синхронизируем состояние нод с сервером
+        java.util.List<String> serverUnlocked = ClientState.getUnlockedNodes();
+        for (SkillNode n : nodes.values()) {
+            boolean wasUnlocked = n.unlocked;
+            n.unlocked = serverUnlocked.contains(n.id);
+            // Если только что разблокировалась — обновляем lastUnlockedNode
+            if (n.unlocked && !wasUnlocked) {
+                lastUnlockedNode = n;
+                flashNode = n;
+                flashTime = 1.0f;
+            }
+        }
 
         // Hold progression
         if (pressedNode != null) {
@@ -286,19 +346,65 @@ public class IdlecraftScreen extends Screen {
         boolean debug = DebugState.isAvailable(this.client != null ? this.client.player : null);
         if (debug) renderGrid(ctx);
         renderConnections(ctx);
-        if (hoverNode != null) {
-            int nx = worldToScreenX(hoverNode.x);
-            int ny = worldToScreenY(hoverNode.y);
-            int half = (int)(hoverNode.size * zoom / 2);
-            renderTooltip(ctx, hoverNode, nx, ny - half - 80);
-        }
+
         hoverNode = null;
-        for (SkillNode n : nodes.values()) renderNode(ctx, n, mx, my);
+        for (SkillNode n : nodes.values()) {
+            if (!isNodeVisible(n)) continue;
+            int half = (int)(n.size * zoom / 2);
+            int cx = worldToScreenX(n.x);
+            int cy = worldToScreenY(n.y);
+            if (mx >= cx - half && mx <= cx + half && my >= cy - half && my <= cy + half) {
+                hoverNode = n;
+                break;
+            }
+        }
+
+        // Логика Ctrl-расширения
+        boolean hovering = (hoverNode != null);
+        boolean ctrlHeld = isCtrlHeld();
+
+        if (hovering && ctrlHeld) {
+            if (!prevHovering && prevCtrlHeld) {
+                expandLinear = 1.0f;
+            } else {
+                expandLinear = Math.min(1.0f, expandLinear + delta / 10.0f);
+            }
+        } else {
+            expandLinear = Math.max(0.0f, expandLinear - delta / 10.0f);
+        }
+// Ease-in: прогресс растёт медленно в начале, быстро в конце
+        expandProgress = expandLinear * expandLinear;
+        prevCtrlHeld = ctrlHeld;
+        prevHovering = hovering;
+
         renderFlash(ctx);
-        if (returnAlpha < 0.5f) renderPoints(ctx);
+
+        if (hoverNode != null) {
+            renderTooltip(ctx, hoverNode, mx, my);
+        } else {
+            tooltipFade = Math.max(0.0f, tooltipFade - delta / 20.0f);
+        }
+
+        if (tooltipFade > 0.01f) {
+            int darkAlpha = (int)(0xCC * tooltipFade);  // 80% вместо 50%
+            ctx.fill(0, 0, this.width, this.height, (darkAlpha << 24));
+        }
+
+        for (SkillNode n : nodes.values()) {
+            if (!isNodeVisible(n)) continue;
+            boolean dim = (hoverNode != null && n != hoverNode);
+            renderNode(ctx, n, mx, my, dim);
+        }
+
+        if (hoverNode != null) {
+            renderTooltip(ctx, hoverNode, mx, my);
+        }
+
+        renderPoints(ctx);
         renderReturnButton(ctx);
         renderHud(ctx);
         super.render(ctx, mx, my, delta);
+
     }
 
     private void renderGrid(DrawContext ctx) {
@@ -321,22 +427,65 @@ public class IdlecraftScreen extends Screen {
         if (oy >= 0 && oy < this.height) ctx.fill(0, oy, this.width, oy + 1, 0x66FFFFFF);
     }
 
+    private float tooltipFade = 0.0f; // 0..1, для анимации затемнения
+
+    private boolean isNodeVisible(SkillNode n) {
+        if (n.unlockCondition == null) return true;
+        if (n.parentId == null) return true;
+
+        if ("parent_unlocked".equals(n.unlockCondition)) {
+            SkillNode parent = nodes.get(n.parentId);
+            return parent != null && parent.unlocked;
+        }
+        if ("custom".equals(n.unlockCondition)) {
+            // stone_1: "Unlock top branch" → видна если wood_2 или wood_3 разблокирована
+            if ("stone_1".equals(n.id)) {
+                SkillNode wood2 = nodes.get("wood_2");
+                SkillNode wood3 = nodes.get("wood_3");
+                return (wood2 != null && wood2.unlocked) || (wood3 != null && wood3.unlocked);
+            }
+            // wood_1: "Chop 5 wood" → тут нужна серверная статистика, пока всегда видна
+            // (когда добавим статистику — заменим)
+            return true;
+        }
+        return true;
+    }
+
     private void renderConnections(DrawContext ctx) {
         for (SkillNode n : nodes.values()) {
             if (n.parentId == null) continue;
             SkillNode p = nodes.get(n.parentId);
             if (p == null) continue;
-            int x1 = worldToScreenX(p.x), y1 = worldToScreenY(p.y);
-            int x2 = worldToScreenX(n.x), y2 = worldToScreenY(n.y);
+            if (!isNodeVisible(n)) continue;
+
+            int x1 = worldToScreenX(p.x);
+            int y1 = worldToScreenY(p.y);
+            int x2 = worldToScreenX(n.x);
+            int y2 = worldToScreenY(n.y);
+
             int color = (p.unlocked && n.unlocked) ? 0xFF55FF55
                     : p.unlocked ? 0xFFAAAA55 : 0xFF555555;
-            ctx.fill(Math.min(x1, x2), y1 - 1, Math.max(x1, x2) + 1, y1 + 1, color);
-            ctx.fill(x2 - 1, Math.min(y1, y2), x2 + 1, Math.max(y1, y2) + 1, color);
+
+            drawLine(ctx, x1, y1, x2, y2, color);
         }
     }
 
-    private void renderNode(DrawContext ctx, SkillNode n, int mx, int my) {
-        // Shake while holding
+    private void drawLine(DrawContext ctx, int x1, int y1, int x2, int y2, int color) {
+        int dx = Math.abs(x2 - x1);
+        int dy = Math.abs(y2 - y1);
+        int steps = Math.max(dx, dy);
+        if (steps == 0) {
+            ctx.fill(x1 - 1, y1 - 1, x1 + 1, y1 + 1, color);
+            return;
+        }
+        for (int i = 0; i <= steps; i++) {
+            int x = x1 + (x2 - x1) * i / steps;
+            int y = y1 + (y2 - y1) * i / steps;
+            ctx.fill(x - 1, y - 1, x + 1, y + 1, color);
+        }
+    }
+
+    private void renderNode(DrawContext ctx, SkillNode n, int mx, int my, boolean dim) {
         int shakeX = 0, shakeY = 0;
         if (pressedNode == n && holdProgress > 0) {
             shakeX = (int)((Math.random() - 0.5) * 3);
@@ -348,37 +497,37 @@ public class IdlecraftScreen extends Screen {
         int cy = worldToScreenY(n.y) + shakeY;
         int x1 = cx - half, y1 = cy - half, x2 = cx + half, y2 = cy + half;
 
-        boolean hovered = mx >= x1 && mx <= x2 && my >= y1 && my <= y2;
-        if (hovered) hoverNode = n;
+        boolean hovered = (n == hoverNode);
 
-        // Bloom behind while holding
         if (pressedNode == n && holdProgress > 0) {
             int bloom = (int)(half * (1 + 0.4f * holdProgress));
             int bloomAlpha = (int)(holdProgress * 100);
-            ctx.fill(cx - bloom, cy - bloom, cx + bloom, cy + bloom,
-                    (bloomAlpha << 24) | 0x00FFFFFF);
+            ctx.fill(cx - bloom, cy - bloom, cx + bloom, cy + bloom, (bloomAlpha << 24) | 0x00FFFFFF);
         }
 
-        // Body
-        int fill = n.unlocked ? 0xE0205030 : (hovered ? 0xE0404048 : 0xE0282830);
+        int fill = n.unlocked
+                ? (dim ? 0xFF182820 : 0xE0205030)
+                : (hovered ? 0xE0404048 : (dim ? 0xFF181820 : 0xE0282830));
         ctx.fill(x1, y1, x2, y2, fill);
 
-        // Border
-        int border = n.unlocked ? 0xFF55FF55
-                : (pressedNode == n ? 0xFFFFFFFF : (hovered ? 0xFFFFFFFF : 0xFF888888));
+        int border = n.unlocked
+                ? (dim ? 0xFF305530 : 0xFF55FF55)
+                : (pressedNode == n
+                   ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF)
+                   : (hovered
+                      ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF)
+                      : (dim ? 0xFF444444 : 0xFF888888)));
         ctx.fill(x1, y1, x2, y1 + 1, border);
         ctx.fill(x1, y2 - 1, x2, y2, border);
         ctx.fill(x1, y1, x1 + 1, y2, border);
         ctx.fill(x2 - 1, y1, x2, y2, border);
 
-        // Fill overlay (bottom to top while holding)
         if (pressedNode == n && holdProgress > 0) {
             int fillH = (int)((y2 - y1) * holdProgress);
             int fillAlpha = (int)(holdProgress * 180);
             ctx.fill(x1, y2 - fillH, x2, y2, (fillAlpha << 24) | 0x00FFFFFF);
         }
 
-        // Icon (scales with zoom, never disappears)
         float iconSize = Math.max(8, n.size * zoom * 0.5f);
         float scale = iconSize / 16f;
         ctx.getMatrices().pushMatrix();
@@ -387,12 +536,17 @@ public class IdlecraftScreen extends Screen {
         ctx.drawItem(new ItemStack(n.icon), 0, 0);
         ctx.getMatrices().popMatrix();
 
-        // Labels (name + description + cost)
+        // Затемнение иконки
+        if (dim) {
+            ctx.fill(cx - (int)iconSize/2, cy - (int)iconSize/2,
+                    cx + (int)iconSize/2, cy + (int)iconSize/2,
+                    0x80000000);
+        }
+
         if (zoom > 0.4f) {
             int labelY = y2 + 4;
             String name = n.name;
-            ctx.drawTextWithShadow(this.textRenderer, n.getNameText(),
-                    cx - this.textRenderer.getWidth(name) / 2, labelY, 0xFFFFFF);
+            ctx.drawTextWithShadow(this.textRenderer, n.getNameText(), cx - this.textRenderer.getWidth(name) / 2, labelY, dim ? 0x80FFFFFF : 0xFFFFFFFF);
         }
     }
 
@@ -422,44 +576,124 @@ public class IdlecraftScreen extends Screen {
                 Text.literal(text),
                 x + 8, y + 6, 0xFF55FFFF);
     }
-    private void renderTooltip(DrawContext ctx, SkillNode n, int anchorX, int anchorY) {
+    private void renderTooltip(DrawContext ctx, SkillNode n, int mx, int my) {
         if (n == null) return;
         int pad = 6;
         int lineH = 11;
 
         String pointsStr = "Your points: " + ClientState.getPoints();
+        String costStr = "Cost:    " + n.cost;
+
+        // Условие
+        String condStr = null;
+        boolean conditionMet = false;
+        if (!n.unlocked && n.conditionText != null && !n.conditionText.isEmpty()) {
+            if ("wood_1".equals(n.id)) {
+                int progress = ClientState.getProgress("wood_1");
+                condStr = "Condition: " + n.conditionText + " (" + progress + "/5)";
+                conditionMet = (progress >= 5);
+            } else {
+                condStr = "Condition: " + n.conditionText;
+                // stone_1: условие — открыть верхнюю ветку
+                if ("stone_1".equals(n.id)) {
+                    conditionMet = areLastNodesOfTopBranchUnlocked();
+                }
+            }
+        }
+
+        // Расширенная информация (при Ctrl)
+        String grantsStr = null;
+        String unlocksStr = null;
+        int extraLines = 0;
+        if (expandProgress > 0.01f) {
+            grantsStr = "Grants: " + n.description;
+            extraLines++;
+            // Что разблокирует этот нод
+            StringBuilder children = new StringBuilder();
+            for (SkillNode child : nodes.values()) {
+                if (n.id.equals(child.parentId)) {
+                    if (children.length() > 0) children.append(", ");
+                    children.append(child.name);
+                }
+            }
+            if (children.length() > 0) {
+                unlocksStr = "Unlocks: " + children;
+                extraLines++;
+            }
+        }
+
+        // Расчёт размеров
         int wName = this.textRenderer.getWidth(n.name);
         int wDesc = this.textRenderer.getWidth(n.description);
-        int wCost = this.textRenderer.getWidth("Cost:    " + n.cost);
+        int wCost = this.textRenderer.getWidth(costStr);
         int wPts  = this.textRenderer.getWidth(pointsStr);
-        int w = Math.max(Math.max(Math.max(wName, wDesc), wCost), wPts) + pad * 2;
-        int h = lineH * 4 + pad * 2;
+        int wCond = condStr != null ? this.textRenderer.getWidth(condStr) : 0;
+        int wGrants = grantsStr != null ? this.textRenderer.getWidth(grantsStr) : 0;
+        int wUnlocks = unlocksStr != null ? this.textRenderer.getWidth(unlocksStr) : 0;
 
-        // Позиция: над нодой, по центру
-        int x = anchorX - w / 2;
-        int y = anchorY;
+        int maxW = Math.max(Math.max(Math.max(wName, wDesc), wCost), Math.max(wPts, Math.max(wCond, Math.max(wGrants, wUnlocks))));
+        int w = maxW + pad * 2;
+        int baseLines = 4 + (condStr != null ? 1 : 0);
+        float animatedExtraLines = extraLines * expandProgress;
+        int h = (int)(lineH * (baseLines + animatedExtraLines) + pad * 2);
 
-        // Корректировка границ экрана
+
+        // Позиция
+        int nodeScreenX = worldToScreenX(n.x);
+        int nodeScreenY = worldToScreenY(n.y);
+        int halfNode = (int)(n.size * zoom / 2);
+
+        int x = nodeScreenX - w / 2;
+        // По умолчанию — сверху. Если не влезает — снизу.
+        boolean aboveNode = true;
+        int y = nodeScreenY - halfNode - h - 8;
+        if (y < 4) {
+            aboveNode = false;
+            y = nodeScreenY + halfNode + 8;
+        }
+        int bottom = y + h;
         if (x < 4) x = 4;
         if (x + w > this.width - 4) x = this.width - w - 4;
-        if (y < 4) y = anchorY + 200; // если не влезает сверху — показываем снизу
-        if (y + h > this.height - 4) y = this.height - h - 4;
 
-        ctx.fill(x, y, x + w, y + h, 0xE0000000);
+        // Фон
+        ctx.fill(x, y, x + w, y + h, 0xF0000000);
         ctx.fill(x, y, x + w, y + 1, 0xFFAAAAFF);
         ctx.fill(x, y + h - 1, x + w, y + h, 0xFFAAAAFF);
         ctx.fill(x, y, x + 1, y + h, 0xFFAAAAFF);
         ctx.fill(x + w - 1, y, x + w, y + h, 0xFFAAAAFF);
 
-        ctx.drawTextWithShadow(this.textRenderer,
-                n.getNameText(), x + pad, y + pad, 0xFFFFFFFF);
-        ctx.drawTextWithShadow(this.textRenderer,
-                n.getDescText(), x + pad, y + pad + lineH, 0xFFAAAAAA);
-        ctx.drawTextWithShadow(this.textRenderer,
-                n.getCostText(), x + pad, y + pad + lineH * 2, 0xFFFFAA00);
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(pointsStr),
-                x + pad, y + pad + lineH * 3, 0xFF55FFFF);
+        // Текст
+        int textY = y + pad;
+        ctx.drawTextWithShadow(this.textRenderer, n.getNameText(), x + pad, textY, 0xFFFFFFFF);
+        textY += lineH;
+        ctx.drawTextWithShadow(this.textRenderer, n.getDescText(), x + pad, textY, 0xFFAAAAAA);
+        textY += lineH;
+        ctx.drawTextWithShadow(this.textRenderer, n.getCostText(), x + pad, textY, 0xFFFFAA00);
+        textY += lineH;
+        if (condStr != null) {
+            int condColor = conditionMet ? 0xFF55FF55 : 0xFFFF5555;
+            ctx.drawTextWithShadow(this.textRenderer, Text.literal(condStr), x + pad, textY, condColor);
+            textY += lineH;
+        }
+        ctx.drawTextWithShadow(this.textRenderer, Text.literal(pointsStr), x + pad, textY, 0xFF55FFFF);
+
+        int extraTextY = textY + lineH;
+        if (grantsStr != null && expandProgress > 0.01f) {
+            // Рисуем только если есть место
+            if (extraTextY + lineH <= bottom) {
+                ctx.drawTextWithShadow(this.textRenderer,
+                        Text.literal(grantsStr).formatted(Formatting.AQUA),
+                        x + pad, extraTextY, 0xFF55FFFF);
+            }
+            extraTextY += lineH;
+        }
+        if (unlocksStr != null && expandProgress > 0.5f) {
+            if (extraTextY + lineH <= bottom) {
+                ctx.drawTextWithShadow(this.textRenderer,
+                        Text.literal(unlocksStr).formatted(Formatting.LIGHT_PURPLE),
+                        x + pad, extraTextY, 0xFFFF55FF);
+            }
+        }
     }
     private void renderReturnButton(DrawContext ctx) {
         if (returnAlpha < 0.02f) return;
@@ -498,4 +732,16 @@ public class IdlecraftScreen extends Screen {
 
     @Override
     public boolean shouldPause() { return false; }
+
+    private boolean isCtrlHeld() {
+        if (this.client == null) return false;
+        return net.minecraft.client.util.InputUtil.isKeyPressed(
+                this.client.getWindow(),
+                org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL)
+                || net.minecraft.client.util.InputUtil.isKeyPressed(
+                this.client.getWindow(),
+                org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL);
+    }
+
+
 }

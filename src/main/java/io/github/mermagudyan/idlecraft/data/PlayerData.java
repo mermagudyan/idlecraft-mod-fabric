@@ -12,24 +12,33 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Set;
+import java.util.HashSet;
 
 public class PlayerData extends PersistentState {
     public static final String KEY = "idlecraft_player_data";
 
     private final Map<UUID, Integer> points = new HashMap<>();
     private final Map<UUID, List<String>> unlockedNodes = new HashMap<>();
+    private final Map<UUID, Map<String, Integer>> statBases = new HashMap<>();
 
     // Пустой конструктор для дефолта
     public PlayerData() {}
 
     // Конструктор для десериализации
-    public PlayerData(Map<String, Integer> pts, Map<String, List<String>> nodes, Map<String, List<String>> rewarded) {
+    public PlayerData(Map<String, Integer> pts, Map<String, List<String>> nodes,
+                      Map<String, List<String>> rewarded, Map<String, Map<String, Integer>> statBases) {
         pts.forEach((k, v) -> this.points.put(UUID.fromString(k), v));
         nodes.forEach((k, v) -> this.unlockedNodes.put(UUID.fromString(k), v));
         rewarded.forEach((k, v) -> {
             Set<String> set = new HashSet<>(v);
             this.rewardedAdvancements.put(UUID.fromString(k), set);
         });
+        statBases.forEach((k, v) -> this.statBases.put(UUID.fromString(k), new HashMap<>(v)));
+    }
+
+    public boolean hasStatBase(UUID id, String key) {
+        return statBases.getOrDefault(id, new HashMap<>()).containsKey(key);
     }
 
     public void clearRewardedAdvancements(UUID id) {
@@ -47,9 +56,18 @@ public class PlayerData extends PersistentState {
                             .forGetter(d -> toStringMapNodes(d.unlockedNodes)),
                     Codec.unboundedMap(Codec.STRING, Codec.list(Codec.STRING))
                             .optionalFieldOf("rewarded", Map.of())
-                            .forGetter(d -> toStringMapSet(d.rewardedAdvancements))
+                            .forGetter(d -> toStringMapSet(d.rewardedAdvancements)),
+                    Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT))
+                            .optionalFieldOf("statBases", Map.of())
+                            .forGetter(d -> toStringMap2(d.statBases))
             ).apply(instance, PlayerData::new)
     );
+
+    private static Map<String, Map<String, Integer>> toStringMap2(Map<UUID, Map<String, Integer>> in) {
+        Map<String, Map<String, Integer>> out = new HashMap<>();
+        in.forEach((k, v) -> out.put(k.toString(), new HashMap<>(v)));
+        return out;
+    }
 
     private static Map<String, List<String>> toStringMapSet(Map<UUID, Set<String>> in) {
         Map<String, List<String>> out = new HashMap<>();
@@ -113,6 +131,21 @@ public class PlayerData extends PersistentState {
         points.remove(id);
         unlockedNodes.remove(id);
         rewardedAdvancements.remove(id);
+        statBases.remove(id);
+        markDirty();
+    }
+
+    public int getStatBase(UUID id, String statKey) {
+        return statBases.getOrDefault(id, new HashMap<>()).getOrDefault(statKey, 0);
+    }
+
+    public void setStatBase(UUID id, String statKey, int value) {
+        statBases.computeIfAbsent(id, k -> new HashMap<>()).put(statKey, value);
+        markDirty();
+    }
+
+    public void clearStatBases(UUID id) {
+        statBases.remove(id);
         markDirty();
     }
 }
