@@ -2,6 +2,7 @@
 *.class
 
 # Gradle
+build.gradle
 .gradle/
 build/
 out/
