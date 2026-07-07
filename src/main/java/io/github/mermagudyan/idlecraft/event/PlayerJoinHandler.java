@@ -18,7 +18,7 @@ public class PlayerJoinHandler {
     public static void register() {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             UUID id = handler.getPlayer().getUuid();
-            pendingSyncs.put(id, 40); // 2 секунды задержки
+            pendingSyncs.put(id, 40);
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
@@ -26,7 +26,6 @@ public class PlayerJoinHandler {
         });
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            // Итерируемся через Iterator — безопасно для ConcurrentHashMap
             Iterator<Map.Entry<UUID, Integer>> it = pendingSyncs.entrySet().iterator();
             while (it.hasNext()) {
                 Map.Entry<UUID, Integer> entry = it.next();
@@ -37,9 +36,8 @@ public class PlayerJoinHandler {
                         IdlecraftNetworking.syncPointsToClient(player);
                         IdlecraftNetworking.syncNodesToClient(player);
                     }
-                    it.remove();  // ← безопасное удаление через Iterator
+                    it.remove();
                 } else {
-                    // Обновляем через put, а не entry.setValue()
                     pendingSyncs.put(entry.getKey(), ticks);
                 }
             }

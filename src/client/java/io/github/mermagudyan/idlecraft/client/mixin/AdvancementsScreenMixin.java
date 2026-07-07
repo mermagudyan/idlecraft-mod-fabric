@@ -29,11 +29,8 @@ public abstract class AdvancementsScreenMixin extends Screen {
                     var handler = this.client.player.networkHandler;
                     if (handler == null) return;
 
-                    // 1. Сбрасываем ачивки Minecraft (кроме корневой)
                     handler.sendChatCommand("advancement revoke @s everything");
                     handler.sendChatCommand("advancement grant @s only minecraft:story/root");
-
-                    // 2. Очищаем наш список награждённых, чтобы можно было получать очки заново
                     io.github.mermagudyan.idlecraft.network.ClientState.setUnlockedNodes(
                             io.github.mermagudyan.idlecraft.network.ClientState.getUnlockedNodes()
                     );

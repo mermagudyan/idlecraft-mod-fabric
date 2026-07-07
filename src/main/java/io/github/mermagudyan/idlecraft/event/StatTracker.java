@@ -9,20 +9,17 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.stat.Stat;
 import net.minecraft.stat.Stats;
-
+import net.minecraft.item.Items;
 import java.util.HashMap;
 import java.util.Map;
 
 public class StatTracker {
 
-    // Какие статы отслеживаем для каких нод
     private static final Map<String, String> NODE_STAT_KEYS = Map.of(
-            "wood_1", "wood_mined"
+            "sticky", "sticks_picked"
     );
-
-    // Целевые значения
     private static final Map<String, Integer> NODE_TARGETS = Map.of(
-            "wood_1", 5
+            "sticky", 5
     );
 
     private static int tickCounter = 0;
@@ -30,7 +27,7 @@ public class StatTracker {
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
             tickCounter++;
-            if (tickCounter < 20) return; // раз в секунду
+            if (tickCounter < 20) return;
             tickCounter = 0;
 
             for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
@@ -41,37 +38,35 @@ public class StatTracker {
 
     private static void trackPlayer(ServerPlayerEntity player, MinecraftServer server) {
         PlayerData data = PlayerData.getServer(server);
-        String woodKey = "wood_mined";
+        String stickKey = "sticks_picked";
 
         Map<String, Integer> progress = new HashMap<>();
 
-        // Инициализируем базу при первом заходе (через hasStatBase, не == 0)
-        if (!data.hasStatBase(player.getUuid(), woodKey)) {
-            data.setStatBase(player.getUuid(), "wood_mined", StatTracker.getWoodMined(player));
-            System.out.println("[IDLECRAFT] Initialized wood_mined base for "
-                    + player.getName().getString() + " = " + StatTracker.getWoodMined(player));
+        if (!data.hasStatBase(player.getUuid(), stickKey)) {
+            int current = StatTracker.getSticksPicked(player);
+            data.setStatBase(player.getUuid(), stickKey, current);
+            System.out.println("[IDLECRAFT] StatTracker: initialized sticks_picked base for "
+                    + player.getName().getString() + " = " + current);
+        } else {
+            int base = data.getStatBase(player.getUuid(), stickKey);
+            int current = StatTracker.getSticksPicked(player);
+            System.out.println("[IDLECRAFT] StatTracker: " + player.getName().getString()
+                    + " base=" + base + " current=" + current + " delta=" + (current - base));
         }
 
-        int base = data.getStatBase(player.getUuid(), woodKey);
-        int current = StatTracker.getWoodMined(player);
+        int base = data.getStatBase(player.getUuid(), stickKey);
+        int current = StatTracker.getSticksPicked(player);
         int delta = Math.max(0, current - base);
-        int target = NODE_TARGETS.getOrDefault("wood_1", 5);
-        progress.put("wood_1", Math.min(delta, target));
+        int target = NODE_TARGETS.getOrDefault("sticky", 5);
+        progress.put("sticky", Math.min(delta, target));
 
         IdlecraftNetworking.syncConditionProgress(player, progress);
     }
 
-    public static int getWoodMined(ServerPlayerEntity player) {
-        int total = 0;
-        Block[] logs = {
-                Blocks.OAK_LOG, Blocks.SPRUCE_LOG, Blocks.BIRCH_LOG,
-                Blocks.JUNGLE_LOG, Blocks.ACACIA_LOG, Blocks.DARK_OAK_LOG,
-                Blocks.CHERRY_LOG, Blocks.MANGROVE_LOG, Blocks.PALE_OAK_LOG
-        };
-        for (Block log : logs) {
-            Stat<Block> stat = Stats.MINED.getOrCreateStat(log);
-            total += player.getStatHandler().getStat(stat);
-        }
-        return total;
+    public static int getSticksPicked(ServerPlayerEntity player) {
+        return player.getStatHandler().getStat(
+                net.minecraft.stat.Stats.PICKED_UP.getOrCreateStat(Items.STICK)
+        );
     }
+
 }

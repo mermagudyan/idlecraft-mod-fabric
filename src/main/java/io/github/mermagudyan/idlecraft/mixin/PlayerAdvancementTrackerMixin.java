@@ -29,9 +29,8 @@ public abstract class PlayerAdvancementTrackerMixin {
 
         String advId = advancementEntry.id().toString();
 
-        // ФИЛЬТР: пропускаем рецепты и технические ачивки
         if (advId.contains("recipes/")) return;
-        if (advId.endsWith("story/root")) return;  // корневые ачивки вкладок
+        if (advId.endsWith("story/root")) return;
         try {
             PlayerAdvancementTracker self = (PlayerAdvancementTracker) (Object) this;
             if (!self.getProgress(advancementEntry).isDone()) return;

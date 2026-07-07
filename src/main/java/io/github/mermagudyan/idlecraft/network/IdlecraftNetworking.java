@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.network;
 
+import io.github.mermagudyan.idlecraft.screen.SkillNodeRegistry;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import net.fabricmc.fabric.api.networking.v1.PayloadTypeRegistry;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
@@ -9,6 +10,7 @@ import net.minecraft.text.Text;
 import io.github.mermagudyan.idlecraft.event.StatTracker;
 import java.util.Map;
 import java.util.List;
+import io.github.mermagudyan.idlecraft.screen.SkillNode;
 
 public class IdlecraftNetworking {
 
@@ -19,7 +21,6 @@ public class IdlecraftNetworking {
         PayloadTypeRegistry.playC2S().register(NodePurchasePayload.ID, NodePurchasePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ResetRewardedPayload.ID, ResetRewardedPayload.CODEC);
 
-        // === HANDLER 1: Запрос на сброс наград ===
         ServerPlayNetworking.registerGlobalReceiver(ResetRewardedPayload.ID,
                 (payload, ctx) -> {
                     ServerPlayerEntity player = ctx.player();
@@ -37,7 +38,6 @@ public class IdlecraftNetworking {
                     });
                 });
 
-        // === HANDLER 2: Запрос на покупку ноды ===
         ServerPlayNetworking.registerGlobalReceiver(NodePurchasePayload.ID,
                 (payload, ctx) -> {
                     ServerPlayerEntity player = ctx.player();
@@ -67,11 +67,11 @@ public class IdlecraftNetworking {
                             return;
                         }
 
-                        if ("wood_1".equals(nodeId)) {
-                            int progress = StatTracker.getWoodMined(player) - data.getStatBase(player.getUuid(), "wood_mined");
+                        if ("sticky".equals(nodeId)) {
+                            int progress = StatTracker.getSticksPicked(player) - data.getStatBase(player.getUuid(), "sticks_picked");
                             if (progress < 5) {
-                                System.out.println("[IDLECRAFT] Purchase REJECTED (condition wood_1): progress=" + progress);
-                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Chop 5 wood."), false);
+                                System.out.println("[IDLECRAFT] Purchase REJECTED (condition sticky): progress=" + progress);
+                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Get 5 sticks."), false);
                                 return;
                             }
                         }
@@ -102,11 +102,10 @@ public class IdlecraftNetworking {
     }
 
     private static int getCost(String nodeId) {
-        return switch (nodeId) {
-            case "start" -> 0;
-            case "mining", "combat", "speed" -> 50;
-            default -> 10;
-        };
+        for (SkillNode n : SkillNodeRegistry.getAll()) {
+            if (n.id.equals(nodeId)) return n.cost;
+        }
+        return 0;
     }
 
     public static void syncPointsToClient(ServerPlayerEntity player) {

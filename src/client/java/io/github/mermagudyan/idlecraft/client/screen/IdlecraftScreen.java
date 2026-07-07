@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.client.screen;
 
+import io.github.mermagudyan.idlecraft.screen.SkillNode;
 import net.minecraft.client.gui.Click;
 import net.minecraft.client.gui.DrawContext;
 import net.minecraft.client.gui.screen.Screen;
@@ -12,7 +13,7 @@ import net.minecraft.util.math.MathHelper;
 import org.lwjgl.glfw.GLFW;
 import io.github.mermagudyan.idlecraft.client.debug.DebugState;
 import io.github.mermagudyan.idlecraft.network.ClientState;
-
+import net.minecraft.item.Item;
 import io.github.mermagudyan.idlecraft.network.NodePurchasePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import java.util.List;
@@ -24,13 +25,18 @@ public class IdlecraftScreen extends Screen {
     private float expandProgress = 0.0f;
     private boolean prevCtrlHeld = false;
     private boolean prevHovering = false;
-    private float expandLinear = 0.0f; // линейный прогресс 0..1
+    private float expandLinear = 0.0f;
 
     private static final float WORLD_HALF = 5000.0f;
     private static final float MIN_ZOOM = 0.2f;
     private static final float MAX_ZOOM = 1.0f;
-    private static final int HOLD_TICKS = 20;       // 1 sec to unlock
-    private static final int FLASH_TICKS = 20;      // 1 sec flash
+    private static final int HOLD_TICKS = 20;
+    private static final int FLASH_TICKS = 20;
+
+    private boolean animatingCamera = false;
+    private float animStartX, animStartY;
+    private float animTargetX, animTargetY;
+    private float animProgress = 0.0f;
 
     // Camera
     private float cameraX = 0.0f, cameraY = 0.0f, zoom = 1.0f;
@@ -40,39 +46,60 @@ public class IdlecraftScreen extends Screen {
     private final boolean[] keys = new boolean[5];
 
     // Data
-    private final Map<String, SkillNode> nodes = new HashMap<>();
-    private SkillNode hoverNode = null;
-    private SkillNode lastUnlockedNode = null;
+    private final Map<String, io.github.mermagudyan.idlecraft.screen.SkillNode> nodes = new HashMap<>();
+    private io.github.mermagudyan.idlecraft.screen.SkillNode hoverNode = null;
+    private io.github.mermagudyan.idlecraft.screen.SkillNode lastUnlockedNode = null;
     String text = "Points: " + ClientState.getPoints();
 
     // Hold-to-upgrade
-    private SkillNode pressedNode = null;
-    private float holdProgress = 0.0f;     // 0..1
+    private io.github.mermagudyan.idlecraft.screen.SkillNode pressedNode = null;
+    private float holdProgress = 0.0f;
 
     // Flash on unlock
-    private SkillNode flashNode = null;
-    private float flashTime = 0.0f;        // 1..0
-
+    private io.github.mermagudyan.idlecraft.screen.SkillNode flashNode = null;
+    private float flashTime = 0.0f;
     // Return button
-    private float returnAlpha = 0.0f;      // 0..1
-    private float returnAngle = 0.0f;      // radians
+    private float returnAlpha = 0.0f;
+    private float returnAngle = 0.0f;
     private int returnX = 0, returnY = 0;
 
     public IdlecraftScreen() {
         super(Text.literal("Idlecraft"));
-        for (SkillNode n : SkillNode.defaults()) nodes.put(n.id, n);
-        // Загружаем разблокированные ноды из ClientState
+        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : io.github.mermagudyan.idlecraft.screen.SkillNode.defaults()) nodes.put(n.id, n);
         for (String id : ClientState.getUnlockedNodes()) {
-            SkillNode n = nodes.get(id);
+            io.github.mermagudyan.idlecraft.screen.SkillNode n = nodes.get(id);
             if (n != null) n.unlocked = true;
-            // Находим последнюю разблокированную
-            // (просто берём последнюю из списка)
+
         }
-        // Устанавливаем lastUnlockedNode на последнюю разблокированную
         List<String> unlocked = ClientState.getUnlockedNodes();
         if (!unlocked.isEmpty()) {
             lastUnlockedNode = nodes.get(unlocked.get(unlocked.size() - 1));
         }
+    }
+
+    private void startCameraAnim(float targetX, float targetY) {
+        animatingCamera = true;
+        animStartX = cameraX;
+        animStartY = cameraY;
+        animTargetX = targetX;
+        animTargetY = targetY;
+        animProgress = 0.0f;
+    }
+
+    private void updateCameraAnim(float delta) {
+        if (!animatingCamera) return;
+        animProgress += delta / 20.0f;
+        if (animProgress >= 1.0f) {
+            animProgress = 1.0f;
+            cameraX = animTargetX;
+            cameraY = animTargetY;
+            animatingCamera = false;
+            return;
+        }
+        float t = animProgress;
+        float ease = t * t * (3 - 2 * t);
+        cameraX = animStartX + (animTargetX - animStartX) * ease;
+        cameraY = animStartY + (animTargetY - animStartY) * ease;
     }
 
     // ---------- Coordinates ----------
@@ -113,11 +140,11 @@ public class IdlecraftScreen extends Screen {
     }
 
     // ---------- Helpers ----------
-    private boolean canUnlock(SkillNode n) {
+    private boolean canUnlock(io.github.mermagudyan.idlecraft.screen.SkillNode n) {
         if (n.unlocked) return false;
         if (n.cost > ClientState.getPoints()) return false;
         if (n.parentId != null) {
-            SkillNode p = nodes.get(n.parentId);
+            io.github.mermagudyan.idlecraft.screen.SkillNode p = nodes.get(n.parentId);
             if (p == null || !p.unlocked) return false;
         }
         // Клиентская проверка условий
@@ -125,12 +152,12 @@ public class IdlecraftScreen extends Screen {
         return true;
     }
 
-    private boolean isConditionMet(SkillNode n) {
+    private boolean isConditionMet(io.github.mermagudyan.idlecraft.screen.SkillNode n) {
         if (n.conditionText == null || n.conditionText.isEmpty()) return true;
         if (n.unlocked) return true;
 
-        if ("wood_1".equals(n.id)) {
-            return ClientState.getProgress("wood_1") >= 5;
+        if ("sticky".equals(n.id)) {
+            return ClientState.getProgress("sticky") >= 5;
         }
         if ("stone_1".equals(n.id)) {
             return areLastNodesOfTopBranchUnlocked();
@@ -138,20 +165,17 @@ public class IdlecraftScreen extends Screen {
         return true;
     }
 
-    // Проверка: все последние ноды верхней ветки (Y < 0) разблокированы
     private boolean areLastNodesOfTopBranchUnlocked() {
-        for (SkillNode n : nodes.values()) {
-            if (n.y >= 0) continue; // только верхняя ветка
+        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
+            if (n.y >= 0) continue;
             if (n.parentId == null) continue;
-            // Проверяем, есть ли у этой ноды дочерние ноды
             boolean hasChildren = false;
-            for (SkillNode other : nodes.values()) {
+            for (io.github.mermagudyan.idlecraft.screen.SkillNode other : nodes.values()) {
                 if (n.id.equals(other.parentId)) {
                     hasChildren = true;
                     break;
                 }
             }
-            // Если дочерних нет — это "последняя нода"
             if (!hasChildren && !n.unlocked) {
                 return false;
             }
@@ -159,12 +183,10 @@ public class IdlecraftScreen extends Screen {
         return true;
     }
 
-    private void unlockNode(SkillNode n) {
-        // НЕ меняем локальное состояние — ждём подтверждения от сервера
+    private void unlockNode(io.github.mermagudyan.idlecraft.screen.SkillNode n) {
         lastUnlockedNode = n;
         flashNode = n;
         flashTime = 1.0f;
-        // Отправляем пакет на сервер
         ClientPlayNetworking.send(new NodePurchasePayload(n.id));
     }
 
@@ -175,25 +197,26 @@ public class IdlecraftScreen extends Screen {
         double mx = click.x(), my = click.y();
         mouseX = mx; mouseY = my;
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
-            // Return button hit-test
             if (returnAlpha > 0.5f) {
                 int r = 18;
                 if (mx >= returnX - r && mx <= returnX + r && my >= returnY - r && my <= returnY + r) {
                     if (lastUnlockedNode != null) {
-                        cameraX = lastUnlockedNode.x;
-                        cameraY = lastUnlockedNode.y;
+                        startCameraAnim(lastUnlockedNode.x, lastUnlockedNode.y);
                     }
                     return true;
                 }
             }
-            // Node press
             if (hoverNode != null && canUnlock(hoverNode)) {
                 pressedNode = hoverNode;
                 holdProgress = 0.0f;
+                startCameraAnim(hoverNode.x, hoverNode.y);
                 return true;
             }
             if (super.mouseClicked(click, doubleClick)) return true;
             dragging = true;
+            if (animatingCamera) {
+                animatingCamera = false;
+            }
             lastDragX = mx; lastDragY = my;
             return true;
         }
@@ -239,12 +262,27 @@ public class IdlecraftScreen extends Screen {
     public boolean keyPressed(KeyInput key) {
         int code = key.key();
         switch (code) {
-            case GLFW.GLFW_KEY_W -> keys[0] = true;
-            case GLFW.GLFW_KEY_A -> keys[1] = true;
-            case GLFW.GLFW_KEY_S -> keys[2] = true;
-            case GLFW.GLFW_KEY_D -> keys[3] = true;
-            case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> keys[4] = true;
-            case GLFW.GLFW_KEY_ESCAPE -> { this.close(); return true; }
+            case GLFW.GLFW_KEY_W:
+                if (pressedNode == null) keys[0] = true;
+                break;
+            case GLFW.GLFW_KEY_A:
+                if (pressedNode == null) keys[1] = true;
+                break;
+            case GLFW.GLFW_KEY_S:
+                if (pressedNode == null) keys[2] = true;
+                break;
+            case GLFW.GLFW_KEY_D:
+                if (pressedNode == null) keys[3] = true;
+                break;
+            case GLFW.GLFW_KEY_LEFT_SHIFT:
+            case GLFW.GLFW_KEY_RIGHT_SHIFT:
+                if (pressedNode == null) keys[4] = true;
+                break;
+            case GLFW.GLFW_KEY_ESCAPE:
+                this.close();
+                return true;
+            default:
+                return super.keyPressed(key);
         }
         return super.keyPressed(key);
     }
@@ -272,21 +310,26 @@ public class IdlecraftScreen extends Screen {
     // ---------- Tick ----------
     @Override
     public void tick() {
-        // WASD движение камеры
+        if (animatingCamera) {
+            if (pressedNode != null) {
+                hoverNode = pressedNode;
+            }
+            updateCameraAnim(1.0f); // 1 тик
+            return;
+        }
+
         float baseSpeed = 6.0f;
         float speed = (keys[4] ? baseSpeed * 3.0f : baseSpeed) / zoom;
         if (keys[0]) cameraY -= speed;
         if (keys[2]) cameraY += speed;
         if (keys[1]) cameraX -= speed;
         if (keys[3]) cameraX += speed;
-        clampCamera();   // ← ПЕРВЫЙ clampCamera (для камеры)
+        clampCamera();
 
-        // Синхронизируем состояние нод с сервером
         java.util.List<String> serverUnlocked = ClientState.getUnlockedNodes();
-        for (SkillNode n : nodes.values()) {
+        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
             boolean wasUnlocked = n.unlocked;
             n.unlocked = serverUnlocked.contains(n.id);
-            // Если только что разблокировалась — обновляем lastUnlockedNode
             if (n.unlocked && !wasUnlocked) {
                 lastUnlockedNode = n;
                 flashNode = n;
@@ -294,7 +337,6 @@ public class IdlecraftScreen extends Screen {
             }
         }
 
-        // Hold progression
         if (pressedNode != null) {
             if (hoverNode == pressedNode) {
                 holdProgress += 1.0f / HOLD_TICKS;
@@ -309,10 +351,8 @@ public class IdlecraftScreen extends Screen {
             }
         }
 
-        // Flash timer
         if (flashTime > 0) flashTime -= 1.0f / FLASH_TICKS;
 
-        // Return button logic
         updateReturnButton();
     }
 
@@ -348,7 +388,7 @@ public class IdlecraftScreen extends Screen {
         renderConnections(ctx);
 
         hoverNode = null;
-        for (SkillNode n : nodes.values()) {
+        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
             if (!isNodeVisible(n)) continue;
             int half = (int)(n.size * zoom / 2);
             int cx = worldToScreenX(n.x);
@@ -359,7 +399,6 @@ public class IdlecraftScreen extends Screen {
             }
         }
 
-        // Логика Ctrl-расширения
         boolean hovering = (hoverNode != null);
         boolean ctrlHeld = isCtrlHeld();
 
@@ -372,7 +411,6 @@ public class IdlecraftScreen extends Screen {
         } else {
             expandLinear = Math.max(0.0f, expandLinear - delta / 10.0f);
         }
-// Ease-in: прогресс растёт медленно в начале, быстро в конце
         expandProgress = expandLinear * expandLinear;
         prevCtrlHeld = ctrlHeld;
         prevHovering = hovering;
@@ -390,7 +428,7 @@ public class IdlecraftScreen extends Screen {
             ctx.fill(0, 0, this.width, this.height, (darkAlpha << 24));
         }
 
-        for (SkillNode n : nodes.values()) {
+        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
             if (!isNodeVisible(n)) continue;
             boolean dim = (hoverNode != null && n != hoverNode);
             renderNode(ctx, n, mx, my, dim);
@@ -402,6 +440,7 @@ public class IdlecraftScreen extends Screen {
 
         renderPoints(ctx);
         renderReturnButton(ctx);
+        updateCameraAnim(delta);
         renderHud(ctx);
         super.render(ctx, mx, my, delta);
 
@@ -427,7 +466,14 @@ public class IdlecraftScreen extends Screen {
         if (oy >= 0 && oy < this.height) ctx.fill(0, oy, this.width, oy + 1, 0x66FFFFFF);
     }
 
-    private float tooltipFade = 0.0f; // 0..1, для анимации затемнения
+    private float tooltipFade = 0.0f;
+
+    private boolean shouldDrawLine(SkillNode child) {
+        if ("stone_1".equals(child.id)) {
+            return child.unlocked;
+        }
+        return isNodeVisible(child);
+    }
 
     private boolean isNodeVisible(SkillNode n) {
         if (n.unlockCondition == null) return true;
@@ -437,16 +483,22 @@ public class IdlecraftScreen extends Screen {
             SkillNode parent = nodes.get(n.parentId);
             return parent != null && parent.unlocked;
         }
+
         if ("custom".equals(n.unlockCondition)) {
-            // stone_1: "Unlock top branch" → видна если wood_2 или wood_3 разблокирована
-            if ("stone_1".equals(n.id)) {
-                SkillNode wood2 = nodes.get("wood_2");
-                SkillNode wood3 = nodes.get("wood_3");
-                return (wood2 != null && wood2.unlocked) || (wood3 != null && wood3.unlocked);
+            if ("sticky".equals(n.id)) {
+                SkillNode start = nodes.get("start");
+                return start != null && start.unlocked;
             }
-            // wood_1: "Chop 5 wood" → тут нужна серверная статистика, пока всегда видна
-            // (когда добавим статистику — заменим)
-            return true;
+
+            if ("stone_1".equals(n.id)) {
+                SkillNode start = nodes.get("start");
+                return start != null && start.unlocked;
+            }
+
+            if ("tech_1".equals(n.id)) {
+                return ClientState.getProgress("sticky") >= 5;
+            }
+            return false;
         }
         return true;
     }
@@ -456,7 +508,7 @@ public class IdlecraftScreen extends Screen {
             if (n.parentId == null) continue;
             SkillNode p = nodes.get(n.parentId);
             if (p == null) continue;
-            if (!isNodeVisible(n)) continue;
+            if (!shouldDrawLine(n)) continue;
 
             int x1 = worldToScreenX(p.x);
             int y1 = worldToScreenY(p.y);
@@ -468,6 +520,13 @@ public class IdlecraftScreen extends Screen {
 
             drawLine(ctx, x1, y1, x2, y2, color);
         }
+    }
+
+    private String maskIfLocked(SkillNode n, String text) {
+        if (!n.unlocked && !isConditionMet(n)) {
+            return "???";
+        }
+        return text;
     }
 
     private void drawLine(DrawContext ctx, int x1, int y1, int x2, int y2, int color) {
@@ -485,8 +544,9 @@ public class IdlecraftScreen extends Screen {
         }
     }
 
-    private void renderNode(DrawContext ctx, SkillNode n, int mx, int my, boolean dim) {
+    private void renderNode(DrawContext ctx, io.github.mermagudyan.idlecraft.screen.SkillNode n, int mx, int my, boolean dim) {
         int shakeX = 0, shakeY = 0;
+
         if (pressedNode == n && holdProgress > 0) {
             shakeX = (int)((Math.random() - 0.5) * 3);
             shakeY = (int)((Math.random() - 0.5) * 3);
@@ -528,8 +588,18 @@ public class IdlecraftScreen extends Screen {
             ctx.fill(x1, y2 - fillH, x2, y2, (fillAlpha << 24) | 0x00FFFFFF);
         }
 
+        // Иконка (масштабируется с зумом, всегда видна)
         float iconSize = Math.max(8, n.size * zoom * 0.5f);
         float scale = iconSize / 16f;
+        ctx.getMatrices().pushMatrix();
+        ctx.getMatrices().translate(cx - iconSize / 2, cy - iconSize / 2);
+        ctx.getMatrices().scale(scale, scale);
+
+        boolean masked = !n.unlocked && !isConditionMet(n);
+        Item iconToDraw = masked ? net.minecraft.item.Items.BARRIER : n.icon;
+        ctx.drawItem(new ItemStack(iconToDraw), 0, 0);
+        ctx.getMatrices().popMatrix();
+
         ctx.getMatrices().pushMatrix();
         ctx.getMatrices().translate(cx - iconSize / 2, cy - iconSize / 2);
         ctx.getMatrices().scale(scale, scale);
@@ -581,39 +651,34 @@ public class IdlecraftScreen extends Screen {
         int pad = 6;
         int lineH = 11;
 
-        String pointsStr = "Your points: " + ClientState.getPoints();
-        String costStr = "Cost:    " + n.cost;
+        boolean masked = !n.unlocked && !isConditionMet(n);
 
-        // Условие
+        String nameStr = masked ? "???" : n.name;
+        String descStr = masked ? "???" : n.description;
+        String costStr = masked ? "Cost: ???" : "Cost: " + n.cost;
+        String pointsStr = "Your points: " + ClientState.getPoints();
+
         String condStr = null;
         boolean conditionMet = false;
         if (!n.unlocked && n.conditionText != null && !n.conditionText.isEmpty()) {
-            if ("wood_1".equals(n.id)) {
-                int progress = ClientState.getProgress("wood_1");
+            if ("sticky".equals(n.id)) {
+                int progress = ClientState.getProgress("sticky");
                 condStr = "Condition: " + n.conditionText + " (" + progress + "/5)";
                 conditionMet = (progress >= 5);
-            } else {
-                condStr = "Condition: " + n.conditionText;
-                // stone_1: условие — открыть верхнюю ветку
-                if ("stone_1".equals(n.id)) {
-                    conditionMet = areLastNodesOfTopBranchUnlocked();
-                }
             }
         }
 
-        // Расширенная информация (при Ctrl)
         String grantsStr = null;
         String unlocksStr = null;
         int extraLines = 0;
         if (expandProgress > 0.01f) {
-            grantsStr = "Grants: " + n.description;
+            grantsStr = masked ? "???" : n.detailedDescription;
             extraLines++;
-            // Что разблокирует этот нод
             StringBuilder children = new StringBuilder();
             for (SkillNode child : nodes.values()) {
                 if (n.id.equals(child.parentId)) {
                     if (children.length() > 0) children.append(", ");
-                    children.append(child.name);
+                    children.append(masked ? "???" : child.name);
                 }
             }
             if (children.length() > 0) {
@@ -622,9 +687,8 @@ public class IdlecraftScreen extends Screen {
             }
         }
 
-        // Расчёт размеров
-        int wName = this.textRenderer.getWidth(n.name);
-        int wDesc = this.textRenderer.getWidth(n.description);
+        int wName = this.textRenderer.getWidth(nameStr);
+        int wDesc = this.textRenderer.getWidth(descStr);
         int wCost = this.textRenderer.getWidth(costStr);
         int wPts  = this.textRenderer.getWidth(pointsStr);
         int wCond = condStr != null ? this.textRenderer.getWidth(condStr) : 0;
@@ -637,38 +701,39 @@ public class IdlecraftScreen extends Screen {
         float animatedExtraLines = extraLines * expandProgress;
         int h = (int)(lineH * (baseLines + animatedExtraLines) + pad * 2);
 
-
-        // Позиция
         int nodeScreenX = worldToScreenX(n.x);
         int nodeScreenY = worldToScreenY(n.y);
         int halfNode = (int)(n.size * zoom / 2);
 
         int x = nodeScreenX - w / 2;
-        // По умолчанию — сверху. Если не влезает — снизу.
         boolean aboveNode = true;
         int y = nodeScreenY - halfNode - h - 8;
         if (y < 4) {
             aboveNode = false;
             y = nodeScreenY + halfNode + 8;
         }
-        int bottom = y + h;
         if (x < 4) x = 4;
         if (x + w > this.width - 4) x = this.width - w - 4;
+        int bottom = y + h;
 
-        // Фон
         ctx.fill(x, y, x + w, y + h, 0xF0000000);
         ctx.fill(x, y, x + w, y + 1, 0xFFAAAAFF);
         ctx.fill(x, y + h - 1, x + w, y + h, 0xFFAAAAFF);
         ctx.fill(x, y, x + 1, y + h, 0xFFAAAAFF);
         ctx.fill(x + w - 1, y, x + w, y + h, 0xFFAAAAFF);
 
-        // Текст
         int textY = y + pad;
-        ctx.drawTextWithShadow(this.textRenderer, n.getNameText(), x + pad, textY, 0xFFFFFFFF);
+        ctx.drawTextWithShadow(this.textRenderer,
+                Text.literal(nameStr).formatted(n.unlocked ? Formatting.GREEN : Formatting.WHITE),
+                x + pad, textY, 0xFFFFFFFF);
         textY += lineH;
-        ctx.drawTextWithShadow(this.textRenderer, n.getDescText(), x + pad, textY, 0xFFAAAAAA);
+        ctx.drawTextWithShadow(this.textRenderer,
+                Text.literal(descStr).formatted(Formatting.GRAY),
+                x + pad, textY, 0xFFAAAAAA);
         textY += lineH;
-        ctx.drawTextWithShadow(this.textRenderer, n.getCostText(), x + pad, textY, 0xFFFFAA00);
+        ctx.drawTextWithShadow(this.textRenderer,
+                Text.literal(costStr).formatted(Formatting.GOLD),
+                x + pad, textY, 0xFFFFAA00);
         textY += lineH;
         if (condStr != null) {
             int condColor = conditionMet ? 0xFF55FF55 : 0xFFFF5555;
@@ -679,7 +744,6 @@ public class IdlecraftScreen extends Screen {
 
         int extraTextY = textY + lineH;
         if (grantsStr != null && expandProgress > 0.01f) {
-            // Рисуем только если есть место
             if (extraTextY + lineH <= bottom) {
                 ctx.drawTextWithShadow(this.textRenderer,
                         Text.literal(grantsStr).formatted(Formatting.AQUA),

@@ -22,10 +22,8 @@ public class PlayerData extends PersistentState {
     private final Map<UUID, List<String>> unlockedNodes = new HashMap<>();
     private final Map<UUID, Map<String, Integer>> statBases = new HashMap<>();
 
-    // Пустой конструктор для дефолта
     public PlayerData() {}
 
-    // Конструктор для десериализации
     public PlayerData(Map<String, Integer> pts, Map<String, List<String>> nodes,
                       Map<String, List<String>> rewarded, Map<String, Map<String, Integer>> statBases) {
         pts.forEach((k, v) -> this.points.put(UUID.fromString(k), v));
@@ -108,12 +106,24 @@ public class PlayerData extends PersistentState {
     }
 
     public List<String> getUnlockedNodes(UUID id) {
-        return unlockedNodes.computeIfAbsent(id, k -> new ArrayList<>());
+        List<String> list = unlockedNodes.get(id);
+        if (list == null) {
+            list = new ArrayList<>();
+            unlockedNodes.put(id, list);
+        }
+        if (!(list instanceof ArrayList)) {
+            List<String> mutable = new ArrayList<>(list);
+            unlockedNodes.put(id, mutable);
+            list = mutable;
+        }
+        return list;
     }
 
     public void unlockNode(UUID id, String nodeId) {
-        getUnlockedNodes(id).add(nodeId);
-
+        List<String> list = getUnlockedNodes(id);
+        if (!list.contains(nodeId)) {
+            list.add(nodeId);
+        }
         markDirty();
     }
     public boolean isAdvancementRewarded(UUID id, String advId) {
