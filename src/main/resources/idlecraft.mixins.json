@@ -6,6 +6,9 @@
   "mixins": [
     "PlayerAdvancementTrackerMixin",
     "PlayerEntityBreakSpeedMixin",
+    "InteractionManagerAccessor",
+    "CraftingResultSlotMixin",
+    "SeedDropMixin"
   ],
   "client": [],
   "injectors": {

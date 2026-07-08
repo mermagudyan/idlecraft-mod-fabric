@@ -1,12 +1,10 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
-import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.event.StickToolHandler;
-import io.github.mermagudyan.idlecraft.network.ClientState;
 import net.minecraft.block.BlockState;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.item.ItemStack;
-import net.minecraft.server.MinecraftServer;
+import net.minecraft.item.Items;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -16,44 +14,45 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class PlayerEntityBreakSpeedMixin {
 
     @Inject(method = "getBlockBreakingSpeed", at = @At("RETURN"), cancellable = true)
-    private void slowBreakWithoutStart(BlockState block, CallbackInfoReturnable<Float> cir) {
+    private void slowBreak(BlockState block, CallbackInfoReturnable<Float> cir) {
         PlayerEntity self = (PlayerEntity) (Object) this;
-
-        boolean isClient = self.getEntityWorld().isClient();
-
-        boolean hasStart = false;
-        if (isClient) {
-            hasStart = ClientState.getUnlockedNodes().contains("start");
-        } else {
-            MinecraftServer server = self.getEntityWorld().getServer();
-            if (server != null) {
-                hasStart = PlayerData.getServer(server).getUnlockedNodes(self.getUuid()).contains("start");
-            }
-        }
+        boolean isSurvival = !self.isCreative() && !self.isSpectator();
+        if (!isSurvival) return;
 
         float hardness = block.getHardness(self.getEntityWorld(), self.getBlockPos());
-
         ItemStack mainHand = self.getMainHandStack();
         boolean isTool = StickToolHandler.isToolOrStick(mainHand);
 
-        boolean isSurvival = !self.isCreative() && !self.isSpectator();
-
-        if (isSurvival && hardness >= 1.5f) {
-            System.out.println("[IDLECRAFT Mixin] Block: " + block.getBlock().getName().getString()
-                    + " | Hardness: " + hardness
-                    + " | Tool: " + isTool
-                    + " | Side: " + (isClient ? "CLIENT" : "SERVER")
-                    + " | OriginalSpeed: " + cir.getReturnValue());
+        if (mainHand.getItem() == Items.STICK && StickToolHandler.isWoodBlock(block)) {
+            cir.setReturnValue(0.30f);
+            return;
         }
 
-        if (isSurvival && hardness >= 1.5f && !isTool) {
-            System.out.println("[IDLECRAFT Mixin] Setting speed to 0!");
+        if (hardness >= 1.5f && !isTool) {
             cir.setReturnValue(0.0f);
             return;
         }
 
-        if (!hasStart && hardness > 0.0f) {
-            cir.setReturnValue(cir.getReturnValue() / 3.0f);
+        if (!isTool) {
+            if (isDirtLikeBlock(block)) {
+                cir.setReturnValue(cir.getReturnValue() / 6.0f);
+            } else if (hardness >= 0.1f && hardness <= 0.6f) {
+                cir.setReturnValue(cir.getReturnValue() / 5.0f);
+            } else if (hardness > 0.0f) {
+                cir.setReturnValue(cir.getReturnValue() / 3.0f);
+            }
         }
+    }
+
+    private boolean isDirtLikeBlock(BlockState state) {
+        return state.isIn(net.minecraft.registry.tag.BlockTags.DIRT) ||
+                state.isOf(net.minecraft.block.Blocks.GRASS_BLOCK) ||
+                state.isOf(net.minecraft.block.Blocks.MYCELIUM) ||
+                state.isOf(net.minecraft.block.Blocks.PODZOL) ||
+                state.isOf(net.minecraft.block.Blocks.COARSE_DIRT) ||
+                state.isOf(net.minecraft.block.Blocks.ROOTED_DIRT) ||
+                state.isOf(net.minecraft.block.Blocks.MOSS_BLOCK) ||
+                state.isOf(net.minecraft.block.Blocks.FARMLAND) ||
+                state.isOf(net.minecraft.block.Blocks.DIRT_PATH);
     }
 }

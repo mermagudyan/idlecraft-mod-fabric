@@ -1,6 +1,5 @@
 package io.github.mermagudyan.idlecraft.screen;
 
-import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 
 import java.util.ArrayList;
@@ -16,146 +15,174 @@ public class SkillNodeRegistry {
         return all.toArray(new SkillNode[0]);
     }
 
-    // ============================================================
-    // SIMPLE
-    // ============================================================
     public static List<SkillNode> simple() {
         List<SkillNode> list = new ArrayList<>();
 
-        // ЦЕНТР
         list.add(new SkillNode(
                 "start", 0, 0, 80,
                 "Start",
                 "The beginning of your idle journey.",
-                "Unlocks the Idlecraft menu and basic progression. Your adventure starts here.",
+                "Unlocks the Idlecraft menu and basic progression.",
                 0, Items.GRASS_BLOCK, null,
                 null, null,
                 SkillNodeCategory.SIMPLE,
                 "open_menu"
         ));
 
-        // ВЕРХ — ветка Wood
         list.add(new SkillNode(
-                "sticky", -100, -200, 60,
+                "first_steps", 0, -200, 60,
                 "First Steps",
                 "Get 5 sticks to unlock wood breaking.",
-                "Collect 5 sticks by breaking leaves or dead bushes. Sticks can be used as a slow tool to break wood (1 stick = 1 wood block).",
+                "Collect 5 sticks by breaking leaves or dead bushes.",
                 0, Items.STICK, "start",
                 "custom", "Get 5 sticks",
                 SkillNodeCategory.SIMPLE,
                 "effect.wood_breaking_unlock"
         ));
 
-        // НИЗ — ветка Stone
         list.add(new SkillNode(
-                "stone_1", -180, 200, 60,
+                "sticky", 0, -400, 60,
+                "Lumberjack I",
+                "Chop wood. +5% axe speed.",
+                "Grants +5% block break speed when using an axe.",
+                0, Items.OAK_LOG, "first_steps",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                "effect.axe_speed_5"
+        ));
+
+        list.add(new SkillNode(
+                "village_visit", -300, -600, 60,
+                "Village Visit",
+                "Visit a village.",
+                "Find and enter a village to unlock stonecutter recipes.",
+                0, Items.EMERALD, "sticky",
+                "custom", "Visit a village",
+                SkillNodeCategory.SIMPLE,
+                "trigger.village"
+        ));
+
+        list.add(new SkillNode(
+                "crafting_table_unlock", -300, -800, 60,
+                "Crafting Table",
+                "Sacrifice 5 wood to unlock crafting table.",
+                "Use a stonecutter to duplicate wood, then sacrifice 5 logs to unlock the crafting table.",
+                0, Items.CRAFTING_TABLE, "village_visit",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                "unlock.crafting_table",
+                List.of(new SacrificeRequirement(Items.OAK_LOG, 5)), false
+        ));
+
+        list.add(new SkillNode(
+                "wooden_tools", -300, -1000, 60,
+                "Wooden Tools",
+                "Sacrifice 20 seeds. Mine 15 wood.",
+                "Craft a hoe, plant seeds, earn 'A Seedy Place'. Sacrifice 20 seeds and mine 15 wood to unlock wooden tools.",
+                0, Items.WOODEN_HOE, "crafting_table_unlock",
+                "custom", "Mine 15 wood",
+                SkillNodeCategory.SIMPLE,
+                "unlock.wooden_tools",
+                List.of(new SacrificeRequirement(Items.WHEAT_SEEDS, 20)), false
+        ));
+
+        list.add(new SkillNode(
+                "axe_node", 300, -600, 60,
+                "Axe Master",
+                "Sacrifice 16 wood + 2 apples.",
+                "Craft a wooden axe, mine 16 wood with it, then sacrifice 16 wood and 2 apples to unlock stone.",
+                0, Items.WOODEN_AXE, "sticky",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                "trigger.axe",
+                List.of(
+                        new SacrificeRequirement(Items.OAK_LOG, 16),
+                        new SacrificeRequirement(Items.APPLE, 2)
+                ), false
+        ));
+
+        list.add(new SkillNode(
+                "stone_1", 300, -800, 60,
                 "Miner I",
                 "Mine stone. +5% pickaxe speed.",
-                "Grants +5% block break speed when using a pickaxe. Affects stone, ores, and deepslate.",
-                5, Items.COBBLESTONE, "start",
-                "custom", "Unlock top branch",
+                "Grants +5% block break speed when using a pickaxe.",
+                5, Items.COBBLESTONE, "axe_node",
+                "custom", "Unlock axe branch",
                 SkillNodeCategory.SIMPLE,
                 "effect.pickaxe_speed_5"
         ));
 
-        // ПРАВО — ветка Tech
         list.add(new SkillNode(
-                "tech_1", 200, 0, 60,
+                "tech_1", 0, -700, 60,
                 "Efficiency I",
                 "+10% movement speed.",
-                "Applies a permanent movement speed boost. Stacks with potions and beacons.",
-                10, Items.REDSTONE, "start",
-                "custom", null,                    // ← было null, null; стало "custom", null
+                "Sacrifice 3 bread to unlock movement speed boost.",
+                0, Items.BREAD, "sticky",
+                "custom", "Earn 'A Seedy Place'",
                 SkillNodeCategory.SIMPLE,
-                "effect.move_speed_10"
+                "effect.move_speed_10",
+                List.of(new SacrificeRequirement(Items.BREAD, 3)), false
         ));
 
         return list;
     }
 
-    // ============================================================
-    // MEDIUM
-    // ============================================================
     public static List<SkillNode> medium() {
         List<SkillNode> list = new ArrayList<>();
 
-        // Wood branch
         list.add(new SkillNode(
-                "wood_2", -254, -360, 60,
-                "Lumberjack II",
-                "+10% wood drop. Auto-replant saplings.",
-                "10% chance to drop an extra log when chopping trees. Saplings are auto-planted on the spot.",
-                25, Items.STRIPPED_OAK_LOG, "wood_1",
-                null, null,
-                SkillNodeCategory.MEDIUM,
-                "effect.wood_drop_10"
-        ));
-        list.add(new SkillNode(
-                "wood_3", 25, -320, 60,
-                "Arborist",
-                "Reveal all trees in 64-block radius.",
-                "Highlights all trees within 64 blocks with particles. +1 point per tree chopped.",
-                100, Items.GOLDEN_AXE, "wood_1",
-                null, null,
-                SkillNodeCategory.MEDIUM,
-                "effect.tree_reveal"
-        ));
-
-        // Stone branch
-        list.add(new SkillNode(
-                "stone_2", -250, 360, 60,
+                "stone_2", 150, -1000, 60,
                 "Miner II",
                 "+10% ore drop. Auto-smelt 20% of ores.",
-                "10% chance for extra ore drop. 20% of mined ores are auto-smelted into ingots.",
+                "10% chance for extra ore drop. 20% of mined ores are auto-smelted.",
                 25, Items.IRON_ORE, "stone_1",
                 null, null,
                 SkillNodeCategory.MEDIUM,
-                "effect.ore_drop_10"
+                "effect.ore_drop_10",
+                List.of(), true
         ));
+
         list.add(new SkillNode(
-                "stone_3", 10, 380, 60,
+                "stone_3", 450, -1000, 60,
                 "Prospector",
                 "Reveal ores in 32-block radius.",
-                "Highlights ores within 32 blocks. +2 points per ore mined.",
+                "Highlights ores within 32 blocks.",
                 100, Items.DIAMOND_PICKAXE, "stone_1",
                 null, null,
                 SkillNodeCategory.MEDIUM,
-                "effect.ore_reveal"
+                "effect.ore_reveal",
+                List.of(), true
         ));
 
-        // Tech branch
         list.add(new SkillNode(
-                "tech_2", 360, 0, 60,
+                "tech_2", -150, -850, 60,
                 "Efficiency II",
                 "+20% attack speed. +1 max health.",
-                "Applies attack speed boost and increases max health by 1 (half heart).",
+                "Applies attack speed boost and increases max health by 1.",
                 40, Items.REPEATER, "tech_1",
                 null, null,
                 SkillNodeCategory.MEDIUM,
-                "effect.attack_speed_20"
+                "effect.attack_speed_20",
+                List.of(), true
         ));
 
         return list;
     }
 
-    // ============================================================
-    // COMPLEX
-    // ============================================================
     public static List<SkillNode> complex() {
         List<SkillNode> list = new ArrayList<>();
 
         list.add(new SkillNode(
-                "tech_3", 520, 0, 60,
+                "tech_3", -150, -1050, 60,
                 "Overclock",
                 "+15% global action speed.",
-                "Increases ALL action speeds: mining, chopping, attacking, walking, and eating by 15%.",
+                "Increases ALL action speeds by 15%.",
                 200, Items.REDSTONE_BLOCK, "tech_2",
                 null, null,
                 SkillNodeCategory.COMPLEX,
-                "effect.global_speed_15"
+                "effect.global_speed_15",
+                List.of(), true
         ));
-
-
 
         return list;
     }

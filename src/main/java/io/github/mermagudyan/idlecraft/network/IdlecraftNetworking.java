@@ -11,6 +11,9 @@ import io.github.mermagudyan.idlecraft.event.StatTracker;
 import java.util.Map;
 import java.util.List;
 import io.github.mermagudyan.idlecraft.screen.SkillNode;
+import io.github.mermagudyan.idlecraft.screen.SacrificeRequirement;
+import net.minecraft.item.ItemStack;
+import java.util.HashMap;
 
 public class IdlecraftNetworking {
 
@@ -20,7 +23,17 @@ public class IdlecraftNetworking {
         PayloadTypeRegistry.playS2C().register(ConditionProgressPayload.ID, ConditionProgressPayload.CODEC);
         PayloadTypeRegistry.playC2S().register(NodePurchasePayload.ID, NodePurchasePayload.CODEC);
         PayloadTypeRegistry.playC2S().register(ResetRewardedPayload.ID, ResetRewardedPayload.CODEC);
+        PayloadTypeRegistry.playC2S().register(SacrificeOfferPayload.ID, SacrificeOfferPayload.CODEC);
+        PayloadTypeRegistry.playS2C().register(SacrificeStatePayload.ID, SacrificeStatePayload.CODEC);
 
+        ServerPlayNetworking.registerGlobalReceiver(SacrificeOfferPayload.ID,
+                (payload, ctx) -> {
+                    ServerPlayerEntity player = ctx.player();
+                    MinecraftServer server = player.getEntityWorld().getServer();
+                    if (server == null) return;
+                    server.execute(() -> handleSacrifice(player, server, payload.nodeId()));
+                }
+        );
         ServerPlayNetworking.registerGlobalReceiver(ResetRewardedPayload.ID,
                 (payload, ctx) -> {
                     ServerPlayerEntity player = ctx.player();
@@ -67,19 +80,33 @@ public class IdlecraftNetworking {
                             return;
                         }
 
-                        if ("sticky".equals(nodeId)) {
-                            int progress = StatTracker.getSticksPicked(player) - data.getStatBase(player.getUuid(), "sticks_picked");
-                            if (progress < 5) {
-                                System.out.println("[IDLECRAFT] Purchase REJECTED (condition sticky): progress=" + progress);
-                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Get 5 sticks."), false);
+                        if ("stone_1".equals(nodeId)) {
+                            if (!unlocked.contains("axe_node")) {
+                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Unlock axe branch."), false);
                                 return;
                             }
                         }
 
-                        if ("stone_1".equals(nodeId)) {
-                            if (!unlocked.contains("wood_2") && !unlocked.contains("wood_3")) {
-                                System.out.println("[IDLECRAFT] Purchase REJECTED (condition stone_1)");
-                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Unlock top branch."), false);
+                        if ("wooden_tools".equals(nodeId)) {
+                            int progress = StatTracker.getWoodMined(player) - data.getStatBase(player.getUuid(), "wood_mined");
+                            if (progress < 15) {
+                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Mine 15 wood."), false);
+                                return;
+                            }
+                        }
+
+                        if ("axe_node".equals(nodeId)) {
+                            int progress = StatTracker.getWoodMined(player) - data.getStatBase(player.getUuid(), "wood_mined_axe");
+                            if (progress < 16) {
+                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Mine 16 wood with axe."), false);
+                                return;
+                            }
+                        }
+
+                        if ("tech_1".equals(nodeId)) {
+                            var adv = server.getAdvancementLoader().get(net.minecraft.util.Identifier.of("minecraft", "husbandry/plant_seed"));
+                            if (adv == null || !player.getAdvancementTracker().getProgress(adv).isDone()) {
+                                player.sendMessage(net.minecraft.text.Text.literal("[Idlecraft] Condition not met: Earn 'A Seedy Place'."), false);
                                 return;
                             }
                         }
@@ -99,6 +126,68 @@ public class IdlecraftNetworking {
                                 + data.getUnlockedNodes(player.getUuid()).size());
                     });
                 });
+    }
+
+    private static void handleSacrifice(ServerPlayerEntity player, MinecraftServer server, String nodeId) {
+        PlayerData data = PlayerData.getServer(server);
+        if (data.getUnlockedNodes(player.getUuid()).contains(nodeId)) return;
+
+        SkillNode node = null;
+        for (SkillNode n : SkillNodeRegistry.getAll()) {
+            if (n.id.equals(nodeId)) { node = n; break; }
+        }
+        if (node == null || node.sacrifices.isEmpty()) return;
+
+        if (node.parentId != null && !data.getUnlockedNodes(player.getUuid()).contains(node.parentId)) return;
+
+        boolean allMet = true;
+        for (int i = 0; i < node.sacrifices.size(); i++) {
+            SacrificeRequirement req = node.sacrifices.get(i);
+            List<Integer> prog = data.getSacrificeProgress(player.getUuid(), nodeId);
+            int current = i < prog.size() ? prog.get(i) : 0;
+            if (current < req.amount()) {
+                allMet = false;
+                if (player.getInventory().contains(new ItemStack(req.item()))) {
+                    int slot = player.getInventory().getSlotWithStack(new ItemStack(req.item()));
+                    player.getInventory().getStack(slot).decrement(1);
+                    data.setSacrificeProgress(player.getUuid(), nodeId, i, current + 1);
+                    syncSacrificeState(player);
+                    allMet = true;
+                    for (int j = 0; j < node.sacrifices.size(); j++) {
+                        SacrificeRequirement r = node.sacrifices.get(j);
+                        List<Integer> p = data.getSacrificeProgress(player.getUuid(), nodeId);
+                        int c = j < p.size() ? p.get(j) : 0;
+                        if (c < r.amount()) { allMet = false; break; }
+                    }
+                    break;
+                }
+            }
+        }
+
+        if (allMet) {
+            data.unlockNode(player.getUuid(), nodeId);
+            data.clearSacrificeProgress(player.getUuid(), nodeId);
+            syncPointsToClient(player);
+            syncNodesToClient(player);
+            syncSacrificeState(player);
+        }
+    }
+
+    public static void syncSacrificeState(ServerPlayerEntity player) {
+        MinecraftServer server = player.getEntityWorld().getServer();
+        if (server == null) return;
+        PlayerData data = PlayerData.getServer(server);
+        Map<String, int[]> progress = new HashMap<>();
+        for (SkillNode n : SkillNodeRegistry.getAll()) {
+            if (n.sacrifices.isEmpty()) continue;
+            List<Integer> nodeProgress = data.getSacrificeProgress(player.getUuid(), n.id);
+            int[] arr = new int[n.sacrifices.size()];
+            for (int i = 0; i < arr.length; i++) {
+                arr[i] = i < nodeProgress.size() ? nodeProgress.get(i) : 0;
+            }
+            progress.put(n.id, arr);
+        }
+        ServerPlayNetworking.send(player, new SacrificeStatePayload(progress));
     }
 
     private static int getCost(String nodeId) {

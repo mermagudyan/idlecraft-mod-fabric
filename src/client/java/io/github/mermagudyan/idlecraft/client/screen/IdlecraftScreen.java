@@ -19,6 +19,8 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
+import io.github.mermagudyan.idlecraft.network.SacrificeOfferPayload;
+import net.minecraft.item.Items;
 
 public class IdlecraftScreen extends Screen {
 
@@ -140,27 +142,44 @@ public class IdlecraftScreen extends Screen {
     }
 
     // ---------- Helpers ----------
-    private boolean canUnlock(io.github.mermagudyan.idlecraft.screen.SkillNode n) {
+    private boolean canUnlock(SkillNode n) {
         if (n.unlocked) return false;
-        if (n.cost > ClientState.getPoints()) return false;
-        if (n.parentId != null) {
-            io.github.mermagudyan.idlecraft.screen.SkillNode p = nodes.get(n.parentId);
-            if (p == null || !p.unlocked) return false;
-        }
-        // Клиентская проверка условий
+        if (!isNodeVisible(n)) return false;
         if (!isConditionMet(n)) return false;
+        if (n.cost > 0 && n.cost > ClientState.getPoints()) return false;
+
+        if (!n.sacrifices.isEmpty()) {
+            int[] progress = ClientState.getSacrificeProgress(n.id);
+            for (int i = 0; i < n.sacrifices.size(); i++) {
+                int current = i < progress.length ? progress[i] : 0;
+                if (current < n.sacrifices.get(i).amount()) return false;
+            }
+        }
         return true;
     }
 
-    private boolean isConditionMet(io.github.mermagudyan.idlecraft.screen.SkillNode n) {
-        if (n.conditionText == null || n.conditionText.isEmpty()) return true;
+    private boolean isConditionMet(SkillNode n) {
         if (n.unlocked) return true;
+        if (n.conditionText == null || n.conditionText.isEmpty()) return true;
 
-        if ("sticky".equals(n.id)) {
-            return ClientState.getProgress("sticky") >= 5;
+        if ("first_steps".equals(n.id)) {
+            return ClientState.getProgress("first_steps") >= 5;
+        }
+        if ("village_visit".equals(n.id)) {
+            return ClientState.getProgress("crafting_table_unlock") >= 1;
+        }
+        if ("wooden_tools".equals(n.id)) {
+            return ClientState.getProgress("wood_mined") >= 15;
+        }
+        if ("axe_node".equals(n.id)) {
+            return ClientState.getProgress("wood_mined_axe") >= 16;
         }
         if ("stone_1".equals(n.id)) {
-            return areLastNodesOfTopBranchUnlocked();
+            SkillNode axeNode = nodes.get("axe_node");
+            return axeNode != null && axeNode.unlocked;
+        }
+        if ("tech_1".equals(n.id)) {
+            return ClientState.getProgress("seedy_place") >= 1;
         }
         return true;
     }
@@ -206,17 +225,22 @@ public class IdlecraftScreen extends Screen {
                     return true;
                 }
             }
-            if (hoverNode != null && canUnlock(hoverNode)) {
-                pressedNode = hoverNode;
-                holdProgress = 0.0f;
-                startCameraAnim(hoverNode.x, hoverNode.y);
-                return true;
+            if (hoverNode != null) {
+                if (!isConditionMet(hoverNode) || !isNodeVisible(hoverNode)) {
+                    return true;
+                }
+                if (canUnlock(hoverNode)) {
+                    pressedNode = hoverNode;
+                    holdProgress = 0.0f;
+                    startCameraAnim(hoverNode.x, hoverNode.y);
+                    return true;
+                } else if (!hoverNode.sacrifices.isEmpty()) {
+                    ClientPlayNetworking.send(new SacrificeOfferPayload(hoverNode.id));
+                    return true;
+                }
             }
             if (super.mouseClicked(click, doubleClick)) return true;
             dragging = true;
-            if (animatingCamera) {
-                animatingCamera = false;
-            }
             lastDragX = mx; lastDragY = my;
             return true;
         }
@@ -314,7 +338,6 @@ public class IdlecraftScreen extends Screen {
             if (pressedNode != null) {
                 hoverNode = pressedNode;
             }
-            updateCameraAnim(1.0f); // 1 тик
             return;
         }
 
@@ -327,7 +350,7 @@ public class IdlecraftScreen extends Screen {
         clampCamera();
 
         java.util.List<String> serverUnlocked = ClientState.getUnlockedNodes();
-        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
+        for (SkillNode n : nodes.values()) {
             boolean wasUnlocked = n.unlocked;
             n.unlocked = serverUnlocked.contains(n.id);
             if (n.unlocked && !wasUnlocked) {
@@ -469,35 +492,16 @@ public class IdlecraftScreen extends Screen {
     private float tooltipFade = 0.0f;
 
     private boolean shouldDrawLine(SkillNode child) {
-        if ("stone_1".equals(child.id)) {
-            return child.unlocked;
-        }
         return isNodeVisible(child);
     }
 
     private boolean isNodeVisible(SkillNode n) {
-        if (n.unlockCondition == null) return true;
-        if (n.parentId == null) return true;
+        if (n.id.equals("start")) return true;
+        if (n.parentId == null) return false;
 
-        if ("parent_unlocked".equals(n.unlockCondition)) {
-            SkillNode parent = nodes.get(n.parentId);
-            return parent != null && parent.unlocked;
-        }
-
-        if ("custom".equals(n.unlockCondition)) {
-            if ("sticky".equals(n.id)) {
-                SkillNode start = nodes.get("start");
-                return start != null && start.unlocked;
-            }
-
-            if ("stone_1".equals(n.id)) {
-                SkillNode start = nodes.get("start");
-                return start != null && start.unlocked;
-            }
-
-            if ("tech_1".equals(n.id)) {
-                return ClientState.getProgress("sticky") >= 5;
-            }
+        SkillNode parent = nodes.get(n.parentId);
+        if (parent == null || !parent.unlocked) {
+            if (n.hiddenUntilParent) return false;
             return false;
         }
         return true;
@@ -544,9 +548,8 @@ public class IdlecraftScreen extends Screen {
         }
     }
 
-    private void renderNode(DrawContext ctx, io.github.mermagudyan.idlecraft.screen.SkillNode n, int mx, int my, boolean dim) {
+    private void renderNode(DrawContext ctx, SkillNode n, int mx, int my, boolean dim) {
         int shakeX = 0, shakeY = 0;
-
         if (pressedNode == n && holdProgress > 0) {
             shakeX = (int)((Math.random() - 0.5) * 3);
             shakeY = (int)((Math.random() - 0.5) * 3);
@@ -558,65 +561,51 @@ public class IdlecraftScreen extends Screen {
         int x1 = cx - half, y1 = cy - half, x2 = cx + half, y2 = cy + half;
 
         boolean hovered = (n == hoverNode);
+        boolean masked = !n.unlocked && !isConditionMet(n);
 
-        if (pressedNode == n && holdProgress > 0) {
+        if (pressedNode == n && holdProgress > 0 && !masked) {
             int bloom = (int)(half * (1 + 0.4f * holdProgress));
             int bloomAlpha = (int)(holdProgress * 100);
             ctx.fill(cx - bloom, cy - bloom, cx + bloom, cy + bloom, (bloomAlpha << 24) | 0x00FFFFFF);
         }
 
-        int fill = n.unlocked
-                ? (dim ? 0xFF182820 : 0xE0205030)
-                : (hovered ? 0xE0404048 : (dim ? 0xFF181820 : 0xE0282830));
+        int fill = n.unlocked ? (dim ? 0xFF182820 : 0xE0205030)
+                : (masked ? (dim ? 0xFF141414 : 0xE01A1A1A)
+                   : (hovered ? 0xE0404048 : (dim ? 0xFF181820 : 0xE0282830)));
         ctx.fill(x1, y1, x2, y2, fill);
 
-        int border = n.unlocked
-                ? (dim ? 0xFF305530 : 0xFF55FF55)
-                : (pressedNode == n
-                   ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF)
-                   : (hovered
-                      ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF)
-                      : (dim ? 0xFF444444 : 0xFF888888)));
+        int border = n.unlocked ? (dim ? 0xFF305530 : 0xFF55FF55)
+                : (masked ? (dim ? 0xFF333333 : 0xFF555555)
+                   : (pressedNode == n ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF)
+                      : (hovered ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF) : (dim ? 0xFF444444 : 0xFF888888))));
         ctx.fill(x1, y1, x2, y1 + 1, border);
         ctx.fill(x1, y2 - 1, x2, y2, border);
         ctx.fill(x1, y1, x1 + 1, y2, border);
         ctx.fill(x2 - 1, y1, x2, y2, border);
 
-        if (pressedNode == n && holdProgress > 0) {
+        if (pressedNode == n && holdProgress > 0 && !masked) {
             int fillH = (int)((y2 - y1) * holdProgress);
             int fillAlpha = (int)(holdProgress * 180);
             ctx.fill(x1, y2 - fillH, x2, y2, (fillAlpha << 24) | 0x00FFFFFF);
         }
 
-        // Иконка (масштабируется с зумом, всегда видна)
         float iconSize = Math.max(8, n.size * zoom * 0.5f);
         float scale = iconSize / 16f;
         ctx.getMatrices().pushMatrix();
         ctx.getMatrices().translate(cx - iconSize / 2, cy - iconSize / 2);
         ctx.getMatrices().scale(scale, scale);
 
-        boolean masked = !n.unlocked && !isConditionMet(n);
-        Item iconToDraw = masked ? net.minecraft.item.Items.BARRIER : n.icon;
+        Item iconToDraw = masked ? Items.BARRIER : n.icon;
         ctx.drawItem(new ItemStack(iconToDraw), 0, 0);
         ctx.getMatrices().popMatrix();
 
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().translate(cx - iconSize / 2, cy - iconSize / 2);
-        ctx.getMatrices().scale(scale, scale);
-        ctx.drawItem(new ItemStack(n.icon), 0, 0);
-        ctx.getMatrices().popMatrix();
-
-        // Затемнение иконки
-        if (dim) {
-            ctx.fill(cx - (int)iconSize/2, cy - (int)iconSize/2,
-                    cx + (int)iconSize/2, cy + (int)iconSize/2,
-                    0x80000000);
-        }
-
         if (zoom > 0.4f) {
             int labelY = y2 + 4;
-            String name = n.name;
-            ctx.drawTextWithShadow(this.textRenderer, n.getNameText(), cx - this.textRenderer.getWidth(name) / 2, labelY, dim ? 0x80FFFFFF : 0xFFFFFFFF);
+            String name = masked ? "???" : n.name;
+            ctx.drawTextWithShadow(this.textRenderer,
+                    Text.literal(name).formatted(n.unlocked ? Formatting.GREEN : Formatting.WHITE),
+                    cx - this.textRenderer.getWidth(name) / 2, labelY,
+                    dim ? 0x80FFFFFF : 0xFFFFFFFF);
         }
     }
 
@@ -660,11 +649,31 @@ public class IdlecraftScreen extends Screen {
 
         String condStr = null;
         boolean conditionMet = false;
-        if (!n.unlocked && n.conditionText != null && !n.conditionText.isEmpty()) {
-            if ("sticky".equals(n.id)) {
-                int progress = ClientState.getProgress("sticky");
+        if (!n.unlocked && n.conditionText != null && !n.conditionText.isEmpty() && !masked) {
+            if ("first_steps".equals(n.id)) {
+                int progress = ClientState.getProgress("first_steps");
                 condStr = "Condition: " + n.conditionText + " (" + progress + "/5)";
                 conditionMet = (progress >= 5);
+            } else if ("village_visit".equals(n.id)) {
+                conditionMet = ClientState.getProgress("crafting_table_unlock") >= 1;
+                condStr = "Condition: " + n.conditionText + (conditionMet ? " (Done)" : "");
+            } else if ("wooden_tools".equals(n.id)) {
+                int progress = ClientState.getProgress("wood_mined");
+                condStr = "Condition: " + n.conditionText + " (" + progress + "/15)";
+                conditionMet = (progress >= 15);
+            } else if ("axe_node".equals(n.id)) {
+                int progress = ClientState.getProgress("wood_mined_axe");
+                condStr = "Condition: " + n.conditionText + " (" + progress + "/16)";
+                conditionMet = (progress >= 16);
+            } else if ("stone_1".equals(n.id)) {
+                SkillNode axeNode = nodes.get("axe_node");
+                conditionMet = axeNode != null && axeNode.unlocked;
+                condStr = "Condition: " + n.conditionText + (conditionMet ? " (Done)" : "");
+            } else if ("tech_1".equals(n.id)) {
+                conditionMet = ClientState.getProgress("seedy_place") >= 1;
+                condStr = "Condition: " + n.conditionText + (conditionMet ? " (Done)" : "");
+            } else {
+                condStr = "Condition: " + n.conditionText;
             }
         }
 

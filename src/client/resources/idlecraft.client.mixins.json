@@ -5,7 +5,8 @@
   "compatibilityLevel": "JAVA_21",
   "mixins": [],
   "client": [
-    "AdvancementsScreenMixin"
+    "AdvancementsScreenMixin",
+    "CraftingResultSlotMixin"
   ],
   "injectors": {
     "defaultRequire": 1

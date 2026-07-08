@@ -3,7 +3,7 @@ package io.github.mermagudyan.idlecraft.screen;
 import net.minecraft.item.Item;
 import net.minecraft.text.Text;
 import net.minecraft.util.Formatting;
-
+import java.util.List;
 public class SkillNode {
     public final String id;
     public final float x, y;
@@ -20,17 +20,24 @@ public class SkillNode {
     public final String effectId; // идентификатор эффекта для сервера
 
     public boolean unlocked = false;
-    public SkillNode(String id, float x, float y, int size,
-                     String name, String description, int cost, Item icon, String parentId) {
-        this(id, x, y, size, name, description, "", cost, icon, parentId,
-                "parent_unlocked", null, SkillNodeCategory.SIMPLE, null);
-    }
+    public final List<SacrificeRequirement> sacrifices;
+    public final boolean hiddenUntilParent;
 
     public SkillNode(String id, float x, float y, int size,
                      String name, String description, String detailedDescription,
                      int cost, Item icon, String parentId,
                      String unlockCondition, String conditionText,
                      SkillNodeCategory category, String effectId) {
+        this(id, x, y, size, name, description, detailedDescription, cost, icon, parentId,
+                unlockCondition, conditionText, category, effectId, List.of(), false);
+    }
+
+    public SkillNode(String id, float x, float y, int size,
+                     String name, String description, String detailedDescription,
+                     int cost, Item icon, String parentId,
+                     String unlockCondition, String conditionText,
+                     SkillNodeCategory category, String effectId,
+                     List<SacrificeRequirement> sacrifices, boolean hiddenUntilParent) {
         this.id = id;
         this.x = x;
         this.y = y;
@@ -45,6 +52,8 @@ public class SkillNode {
         this.conditionText = conditionText;
         this.category = category;
         this.effectId = effectId;
+        this.sacrifices = sacrifices;
+        this.hiddenUntilParent = hiddenUntilParent;
     }
 
     public Text getNameText() {
