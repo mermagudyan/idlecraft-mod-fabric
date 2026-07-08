@@ -67,6 +67,7 @@ public class IdlecraftScreen extends Screen {
             SkillNode n = nodes.get(id);
             if (n != null) n.unlocked = true;
         }
+        lastUnlockedNode = nodes.get("start");
         List<String> unlocked = ClientState.getUnlockedNodes();
         if (!unlocked.isEmpty()) {
             lastUnlockedNode = nodes.get(unlocked.get(unlocked.size() - 1));
@@ -211,25 +212,27 @@ public class IdlecraftScreen extends Screen {
             if (returnAlpha > 0.5f) {
                 int r = 18;
                 if (mx >= returnX - r && mx <= returnX + r && my >= returnY - r && my <= returnY + r) {
-                    if (lastUnlockedNode != null) {
-                        startCameraAnim(lastUnlockedNode.x, lastUnlockedNode.y);
+                    SkillNode target = getReturnTarget();
+                    if (target != null) {
+                        startCameraAnim(target.x, target.y);
                     }
                     return true;
                 }
             }
             if (hoverNode != null) {
-                if (!isConditionMet(hoverNode) || !isNodeVisible(hoverNode)) {
+                if (!isNodeVisible(hoverNode)) {
                     return true;
                 }
+                startCameraAnim(hoverNode.x, hoverNode.y);
                 if (canUnlock(hoverNode)) {
                     pressedNode = hoverNode;
                     holdProgress = 0.0f;
-                    startCameraAnim(hoverNode.x, hoverNode.y);
                     return true;
                 } else if (!hoverNode.sacrifices.isEmpty()) {
                     ClientPlayNetworking.send(new SacrificeOfferPayload(hoverNode.id));
                     return true;
                 }
+                return true;
             }
             if (super.mouseClicked(event, doubleClick)) return true;
             dragging = true;
@@ -340,21 +343,28 @@ public class IdlecraftScreen extends Screen {
         clampCamera();
 
         List<String> serverUnlocked = ClientState.getUnlockedNodes();
+        boolean anyUnlocked = false;
         for (SkillNode n : nodes.values()) {
             boolean wasUnlocked = n.unlocked;
             n.unlocked = serverUnlocked.contains(n.id);
+            if (n.unlocked) anyUnlocked = true;
             if (n.unlocked && !wasUnlocked) {
                 lastUnlockedNode = n;
                 flashNode = n;
                 flashTime = 1.0f;
             }
         }
+        if (!anyUnlocked) {
+            lastUnlockedNode = nodes.get("start");
+        }
 
         if (pressedNode != null) {
             if (hoverNode == pressedNode) {
                 holdProgress += 1.0f / HOLD_TICKS;
                 if (holdProgress >= 1.0f) {
-                    unlockNode(pressedNode);
+                    if (canUnlock(pressedNode)) {
+                        unlockNode(pressedNode);
+                    }
                     pressedNode = null;
                     holdProgress = 0.0f;
                 }
@@ -370,15 +380,16 @@ public class IdlecraftScreen extends Screen {
     }
 
     private void updateReturnButton() {
-        float target = 0.0f;
-        if (lastUnlockedNode != null) {
-            int tx = worldToScreenX(lastUnlockedNode.x);
-            int ty = worldToScreenY(lastUnlockedNode.y);
+        SkillNode target = getReturnTarget();
+        float targetAlpha = 0.0f;
+        if (target != null) {
+            int tx = worldToScreenX(target.x);
+            int ty = worldToScreenY(target.y);
             int margin = 60;
             boolean off = tx < margin || tx > this.width - margin
                     || ty < margin || ty > this.height - margin;
             if (off) {
-                target = 1.0f;
+                targetAlpha = 1.0f;
                 double dx = tx - this.width / 2.0;
                 double dy = ty - this.height / 2.0;
                 returnAngle = (float)Math.atan2(dy, dx);
@@ -389,7 +400,27 @@ public class IdlecraftScreen extends Screen {
                 returnY = (int)Mth.clamp(by, 40, this.height - 40);
             }
         }
-        returnAlpha = Mth.lerp(0.2f, returnAlpha, target);
+        returnAlpha = Mth.lerp(0.2f, returnAlpha, targetAlpha);
+    }
+
+    private SkillNode getReturnTarget() {
+        SkillNode immediate = null;
+        SkillNode any = null;
+        for (SkillNode n : nodes.values()) {
+            if (n.unlocked || !isNodeVisible(n)) continue;
+            if (canUnlock(n)) return n;
+            if (n.parentId == null) {
+                if (any == null) any = n;
+                continue;
+            }
+            SkillNode p = nodes.get(n.parentId);
+            if (p != null && p.unlocked) {
+                if (immediate == null) immediate = n;
+            } else if (any == null) any = n;
+        }
+        if (immediate != null) return immediate;
+        if (any != null) return any;
+        return nodes.get("start");
     }
 
     @Override
@@ -672,13 +703,13 @@ public class IdlecraftScreen extends Screen {
         String unlocksStr = null;
         int extraLines = 0;
         if (expandProgress > 0.01f) {
-            grantsStr = n.detailedDescription;
+            grantsStr = n.unlocked ? n.detailedDescription : "???";
             extraLines++;
             StringBuilder children = new StringBuilder();
             for (SkillNode child : nodes.values()) {
                 if (n.id.equals(child.parentId)) {
                     if (children.length() > 0) children.append(", ");
-                    children.append(child.name);
+                    children.append(n.unlocked ? child.name : "???");
                 }
             }
             if (children.length() > 0) {

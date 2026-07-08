@@ -13,6 +13,7 @@ import net.minecraft.network.chat.Component;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.HashSet;
 
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
@@ -26,9 +27,26 @@ public class IdlecraftCommand {
                         .then(literal("off").executes(ctx -> setDebug(ctx.getSource(), false)))
                 )
                 .then(literal("open")
+                        .requires(IdlecraftCommand::isDebugOn)
                         .then(argument("node", StringArgumentType.word())
+                                .suggests((ctx, builder) -> {
+                                    CommandSourceStack source = ctx.getSource();
+                                    ServerPlayer player = source.getPlayer();
+                                    Set<String> unlocked = new HashSet<>();
+                                    if (player != null && player.level().getServer() != null) {
+                                        unlocked.addAll(PlayerData.getServer(player.level().getServer())
+                                                .getUnlockedNodes(player.getUUID()));
+                                    }
+                                    for (SkillNode n : SkillNodeRegistry.getAll()) {
+                                        if (!unlocked.contains(n.id)) {
+                                            builder.suggest(n.id);
+                                        }
+                                    }
+                                    return builder.buildFuture();
+                                })
                                 .executes(ctx -> openNode(ctx.getSource(), StringArgumentType.getString(ctx, "node")))))
                 .then(literal("points")
+                        .requires(IdlecraftCommand::isDebugOn)
                         .then(literal("add")
                                 .then(argument("amount", IntegerArgumentType.integer())
                                         .executes(ctx -> addPoints(ctx.getSource(),
@@ -41,6 +59,7 @@ public class IdlecraftCommand {
                                 .executes(ctx -> getPoints(ctx.getSource())))
                 )
                 .then(literal("reset")
+                        .requires(IdlecraftCommand::isDebugOn)
                         .executes(ctx -> resetPlayer(ctx.getSource())))
         );
     }
@@ -91,6 +110,11 @@ public class IdlecraftCommand {
         }
 
         PlayerData data = PlayerData.getServer(player.level().getServer());
+        final String targetName = target.name;
+        if (data.getUnlockedNodes(player.getUUID()).contains(target.id)) {
+            source.sendSuccess(() -> Component.literal("[Idlecraft] Node already unlocked: " + targetName), false);
+            return 0;
+        }
         Set<String> toUnlock = new LinkedHashSet<>();
         String cur = target.id;
         while (cur != null) {

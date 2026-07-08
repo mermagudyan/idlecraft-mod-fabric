@@ -27,7 +27,7 @@ public abstract class CraftingResultSlotMixin {
         }
     }
 
-    @Inject(method = "getItem", at = @At("HEAD"), cancellable = true)
+    @Inject(method = "getItem", at = @At("RETURN"), cancellable = true)
     private void idlecraft$hideLockedResult(CallbackInfoReturnable<ItemStack> cir) {
         Slot self = (Slot) (Object) this;
         if (!(self instanceof ResultSlot)) return;
@@ -35,7 +35,7 @@ public abstract class CraftingResultSlotMixin {
         Player player = mc.player;
         if (player == null) return;
         int gridSize = player.containerMenu instanceof CraftingMenu ? 9 : 4;
-        if (CraftingLockHandler.isResultSlotLocked(player, gridSize)) {
+        if (CraftingLockHandler.isResultSlotLocked(player, gridSize, cir.getReturnValue())) {
             cir.setReturnValue(ItemStack.EMPTY);
         }
     }

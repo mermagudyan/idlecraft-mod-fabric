@@ -6,6 +6,6 @@ import io.github.mermagudyan.idlecraft.network.ClientState;
 public class DebugState {
     public static boolean isAvailable(LocalPlayer player) {
         if (player == null) return false;
-        return player.isCreative() || ClientState.isDebug();
+        return ClientState.isDebug();
     }
 }

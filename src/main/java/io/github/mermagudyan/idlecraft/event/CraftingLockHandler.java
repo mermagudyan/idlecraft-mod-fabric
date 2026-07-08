@@ -5,6 +5,7 @@ import io.github.mermagudyan.idlecraft.network.ClientState;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import net.minecraft.network.chat.Component;
 import net.minecraft.ChatFormatting;
 
@@ -19,52 +20,45 @@ public class CraftingLockHandler {
         if (result.isEmpty()) return false;
 
         if (gridSize == INVENTORY_GRID) {
+            if (isCraftingTableAllowed(player, result)) return false;
             sendMessage(player, player.level().isClientSide());
             return true;
         }
 
         if (gridSize == TABLE_GRID) {
-            boolean isClient = player.level().isClientSide();
-            List<String> unlocked;
-
-            if (isClient) {
-                unlocked = ClientState.getUnlockedNodes();
-            } else {
-                MinecraftServer server = player.level().getServer();
-                if (server == null) return false;
-                unlocked = PlayerData.getServer(server).getUnlockedNodes(player.getUUID());
-            }
-
-            if (!unlocked.contains("crafting_table_unlock")) {
-                sendMessage(player, isClient);
-                return true;
-            }
+            if (isUnlocked(player, "crafting_table_unlock")) return false;
+            sendMessage(player, player.level().isClientSide());
+            return true;
         }
 
         return false;
     }
 
-    public static boolean isResultSlotLocked(Player player, int gridSize) {
+    public static boolean isResultSlotLocked(Player player, int gridSize, ItemStack result) {
         if (gridSize == INVENTORY_GRID) {
-            return true;
+            return !isCraftingTableAllowed(player, result);
         }
 
         if (gridSize == TABLE_GRID) {
-            boolean isClient = player.level().isClientSide();
-            List<String> unlocked;
-
-            if (isClient) {
-                unlocked = ClientState.getUnlockedNodes();
-            } else {
-                MinecraftServer server = player.level().getServer();
-                if (server == null) return false;
-                unlocked = PlayerData.getServer(server).getUnlockedNodes(player.getUUID());
-            }
-
-            return !unlocked.contains("crafting_table_unlock");
+            return !isUnlocked(player, "crafting_table_unlock");
         }
 
         return false;
+    }
+
+    private static boolean isCraftingTableAllowed(Player player, ItemStack result) {
+        return isUnlocked(player, "crafting_table_unlock")
+                && !result.isEmpty()
+                && result.getItem() == Items.CRAFTING_TABLE;
+    }
+
+    private static boolean isUnlocked(Player player, String id) {
+        if (player.level().isClientSide()) {
+            return ClientState.getUnlockedNodes().contains(id);
+        }
+        MinecraftServer server = player.level().getServer();
+        if (server == null) return false;
+        return PlayerData.getServer(server).getUnlockedNodes(player.getUUID()).contains(id);
     }
 
     private static void sendMessage(Player player, boolean isClient) {
