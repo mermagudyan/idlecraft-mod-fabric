@@ -1,17 +1,18 @@
 package io.github.mermagudyan.idlecraft.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record PointsSyncPayload(int points) implements CustomPayload {
-    public static final Id<PointsSyncPayload> ID =
-            new Id<>(Identifier.of("idlecraft", "points_sync"));
-    public static final PacketCodec<RegistryByteBuf, PointsSyncPayload> CODEC =
-            PacketCodec.tuple(PacketCodecs.VAR_INT, PointsSyncPayload::points, PointsSyncPayload::new);
+public record PointsSyncPayload(int points) implements CustomPacketPayload {
+    public static final CustomPacketPayload.Type<PointsSyncPayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("idlecraft", "points_sync"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, PointsSyncPayload> STREAM_CODEC =
+            StreamCodec.composite(ByteBufCodecs.VAR_INT, PointsSyncPayload::points, PointsSyncPayload::new);
 
     @Override
-    public Id<? extends CustomPayload> getId() { return ID; }
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
 }

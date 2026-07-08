@@ -1,17 +1,18 @@
 package io.github.mermagudyan.idlecraft.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.codec.PacketCodecs;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record NodePurchasePayload(String nodeId) implements CustomPayload {
-    public static final Id<NodePurchasePayload> ID =
-            new Id<>(Identifier.of("idlecraft", "node_purchase"));
-    public static final PacketCodec<RegistryByteBuf, NodePurchasePayload> CODEC =
-            PacketCodec.tuple(PacketCodecs.STRING, NodePurchasePayload::nodeId, NodePurchasePayload::new);
+public record NodePurchasePayload(String nodeId) implements CustomPacketPayload {
+    public static final CustomPacketPayload.Type<NodePurchasePayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("idlecraft", "node_purchase"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, NodePurchasePayload> STREAM_CODEC =
+            StreamCodec.composite(ByteBufCodecs.STRING_UTF8, NodePurchasePayload::nodeId, NodePurchasePayload::new);
 
     @Override
-    public Id<? extends CustomPayload> getId() { return ID; }
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
 }

@@ -1,26 +1,27 @@
 package io.github.mermagudyan.idlecraft.client.screen;
 
 import io.github.mermagudyan.idlecraft.screen.SkillNode;
-import net.minecraft.client.gui.Click;
-import net.minecraft.client.gui.DrawContext;
-import net.minecraft.client.gui.screen.Screen;
-import net.minecraft.client.gui.widget.ButtonWidget;
-import net.minecraft.client.input.KeyInput;
-import net.minecraft.item.ItemStack;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.util.math.MathHelper;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
+import net.minecraft.util.Mth;
 import org.lwjgl.glfw.GLFW;
 import io.github.mermagudyan.idlecraft.client.debug.DebugState;
 import io.github.mermagudyan.idlecraft.network.ClientState;
-import net.minecraft.item.Item;
+import net.minecraft.world.item.Item;
 import io.github.mermagudyan.idlecraft.network.NodePurchasePayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import io.github.mermagudyan.idlecraft.network.SacrificeOfferPayload;
-import net.minecraft.item.Items;
+import net.minecraft.world.item.Items;
+import com.mojang.blaze3d.platform.InputConstants;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
 
 public class IdlecraftScreen extends Screen {
 
@@ -40,38 +41,32 @@ public class IdlecraftScreen extends Screen {
     private float animTargetX, animTargetY;
     private float animProgress = 0.0f;
 
-    // Camera
     private float cameraX = 0.0f, cameraY = 0.0f, zoom = 1.0f;
     private boolean dragging = false;
     private double lastDragX, lastDragY;
     private double mouseX = 0, mouseY = 0;
     private final boolean[] keys = new boolean[5];
 
-    // Data
-    private final Map<String, io.github.mermagudyan.idlecraft.screen.SkillNode> nodes = new HashMap<>();
-    private io.github.mermagudyan.idlecraft.screen.SkillNode hoverNode = null;
-    private io.github.mermagudyan.idlecraft.screen.SkillNode lastUnlockedNode = null;
-    String text = "Points: " + ClientState.getPoints();
+    private final Map<String, SkillNode> nodes = new HashMap<>();
+    private SkillNode hoverNode = null;
+    private SkillNode lastUnlockedNode = null;
 
-    // Hold-to-upgrade
-    private io.github.mermagudyan.idlecraft.screen.SkillNode pressedNode = null;
+    private SkillNode pressedNode = null;
     private float holdProgress = 0.0f;
 
-    // Flash on unlock
-    private io.github.mermagudyan.idlecraft.screen.SkillNode flashNode = null;
+    private SkillNode flashNode = null;
     private float flashTime = 0.0f;
-    // Return button
     private float returnAlpha = 0.0f;
     private float returnAngle = 0.0f;
     private int returnX = 0, returnY = 0;
+    private float tooltipFade = 0.0f;
 
     public IdlecraftScreen() {
-        super(Text.literal("Idlecraft"));
-        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : io.github.mermagudyan.idlecraft.screen.SkillNode.defaults()) nodes.put(n.id, n);
+        super(Component.literal("Idlecraft"));
+        for (SkillNode n : SkillNode.defaults()) nodes.put(n.id, n);
         for (String id : ClientState.getUnlockedNodes()) {
-            io.github.mermagudyan.idlecraft.screen.SkillNode n = nodes.get(id);
+            SkillNode n = nodes.get(id);
             if (n != null) n.unlocked = true;
-
         }
         List<String> unlocked = ClientState.getUnlockedNodes();
         if (!unlocked.isEmpty()) {
@@ -104,44 +99,40 @@ public class IdlecraftScreen extends Screen {
         cameraY = animStartY + (animTargetY - animStartY) * ease;
     }
 
-    // ---------- Coordinates ----------
     private float screenToWorldX(double sx) { return cameraX + (float)((sx - this.width / 2.0) / zoom); }
     private float screenToWorldY(double sy) { return cameraY + (float)((sy - this.height / 2.0) / zoom); }
     private int worldToScreenX(float wx) { return (int)(this.width / 2.0 + (wx - cameraX) * zoom); }
     private int worldToScreenY(float wy) { return (int)(this.height / 2.0 + (wy - cameraY) * zoom); }
 
-    // ---------- Buttons ----------
     @Override
     protected void init() {
-        boolean debug = DebugState.isAvailable(this.client != null ? this.client.player : null);
+        boolean debug = DebugState.isAvailable(this.minecraft != null ? this.minecraft.player : null);
 
         int yPrestige = debug ? this.height - 50 : this.height - 25;
         if (debug) {
-            this.addDrawableChild(ButtonWidget.builder(
-                    Text.literal("Reset Idlecraft").formatted(Formatting.RED),
+            this.addRenderableWidget(Button.builder(
+                    Component.literal("Reset Idlecraft").withStyle(ChatFormatting.RED),
                     b -> {
-                        if (this.client != null && this.client.player != null
-                                && this.client.player.networkHandler != null) {
-                            this.client.player.networkHandler.sendChatCommand("idlecraft reset");
-                            this.client.player.sendMessage(
-                                    Text.literal("[Idlecraft] Progress reset."), false);
+                        if (this.minecraft != null && this.minecraft.player != null
+                                && this.minecraft.player.connection != null) {
+                            this.minecraft.player.connection.sendCommand("idlecraft reset");
+                            this.minecraft.player.sendSystemMessage(
+                                    Component.literal("[Idlecraft] Progress reset."));
                         }
                     }
-            ).dimensions(this.width / 2 - 75, this.height - 25, 150, 20).build());
+            ).bounds(this.width / 2 - 75, this.height - 25, 150, 20).build());
         }
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Prestige").formatted(Formatting.GOLD),
-                b -> this.client.setScreen(new PrestigeConfirmScreen(this))
-        ).dimensions(this.width / 2 - 155, yPrestige, 150, 20).build());
+        this.addRenderableWidget(Button.builder(
+                Component.literal("Prestige").withStyle(ChatFormatting.GOLD),
+                b -> this.minecraft.setScreenAndShow(new PrestigeConfirmScreen(this))
+        ).bounds(this.width / 2 - 155, yPrestige, 150, 20).build());
 
-        this.addDrawableChild(ButtonWidget.builder(
-                Text.literal("Close"),
-                b -> this.close()
-        ).dimensions(this.width / 2 + 5, yPrestige, 150, 20).build());
-
+        this.addRenderableWidget(Button.builder(
+                Component.literal("Close"),
+                b -> this.onClose()
+        ).bounds(this.width / 2 + 5, yPrestige, 150, 20).build());
     }
 
-    // ---------- Helpers ----------
     private boolean canUnlock(SkillNode n) {
         if (n.unlocked) return false;
         if (!isNodeVisible(n)) return false;
@@ -185,11 +176,11 @@ public class IdlecraftScreen extends Screen {
     }
 
     private boolean areLastNodesOfTopBranchUnlocked() {
-        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
+        for (SkillNode n : nodes.values()) {
             if (n.y >= 0) continue;
             if (n.parentId == null) continue;
             boolean hasChildren = false;
-            for (io.github.mermagudyan.idlecraft.screen.SkillNode other : nodes.values()) {
+            for (SkillNode other : nodes.values()) {
                 if (n.id.equals(other.parentId)) {
                     hasChildren = true;
                     break;
@@ -202,19 +193,18 @@ public class IdlecraftScreen extends Screen {
         return true;
     }
 
-    private void unlockNode(io.github.mermagudyan.idlecraft.screen.SkillNode n) {
+    private void unlockNode(SkillNode n) {
         lastUnlockedNode = n;
         flashNode = n;
         flashTime = 1.0f;
         ClientPlayNetworking.send(new NodePurchasePayload(n.id));
     }
 
-    // ---------- Input ----------
     @Override
-    public boolean mouseClicked(Click click, boolean doubleClick) {
-        int button = click.button();
-        double mx = click.x(), my = click.y();
-        mouseX = mx; mouseY = my;
+    public boolean mouseClicked(final MouseButtonEvent event, final boolean doubleClick) {
+        double mx = event.x(), my = event.y();
+        this.mouseX = mx; this.mouseY = my;
+        int button = event.button();
         if (button == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             if (returnAlpha > 0.5f) {
                 int r = 18;
@@ -239,24 +229,24 @@ public class IdlecraftScreen extends Screen {
                     return true;
                 }
             }
-            if (super.mouseClicked(click, doubleClick)) return true;
+            if (super.mouseClicked(event, doubleClick)) return true;
             dragging = true;
             lastDragX = mx; lastDragY = my;
             return true;
         }
-        return super.mouseClicked(click, doubleClick);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
-    public boolean mouseReleased(Click click) {
-        if (click.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
+    public boolean mouseReleased(final MouseButtonEvent event) {
+        if (event.button() == GLFW.GLFW_MOUSE_BUTTON_LEFT) {
             dragging = false;
             if (pressedNode != null) {
                 pressedNode = null;
                 holdProgress = 0.0f;
             }
         }
-        return super.mouseReleased(click);
+        return super.mouseReleased(event);
     }
 
     @Override
@@ -271,21 +261,22 @@ public class IdlecraftScreen extends Screen {
     }
 
     @Override
-    public boolean mouseScrolled(double mx, double my, double h, double v) {
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        double v = scrollY;
         if (v == 0) return false;
-        float worldX = screenToWorldX(mx);
-        float worldY = screenToWorldY(my);
-        zoom = MathHelper.clamp(zoom * (float)Math.pow(1.15, v), MIN_ZOOM, MAX_ZOOM);
-        cameraX = worldX - (float)((mx - this.width / 2.0) / zoom);
-        cameraY = worldY - (float)((my - this.height / 2.0) / zoom);
+        float worldX = screenToWorldX(mouseX);
+        float worldY = screenToWorldY(mouseY);
+        zoom = Mth.clamp(zoom * (float)Math.pow(1.15, v), MIN_ZOOM, MAX_ZOOM);
+        cameraX = worldX - (float)((mouseX - this.width / 2.0) / zoom);
+        cameraY = worldY - (float)((mouseY - this.height / 2.0) / zoom);
         clampCamera();
         return true;
     }
 
     @Override
-    public boolean keyPressed(KeyInput key) {
-        int code = key.key();
-        switch (code) {
+    public boolean keyPressed(final KeyEvent event) {
+        int keyCode = event.key();
+        switch (keyCode) {
             case GLFW.GLFW_KEY_W:
                 if (pressedNode == null) keys[0] = true;
                 break;
@@ -303,35 +294,32 @@ public class IdlecraftScreen extends Screen {
                 if (pressedNode == null) keys[4] = true;
                 break;
             case GLFW.GLFW_KEY_ESCAPE:
-                this.close();
+                this.onClose();
                 return true;
             default:
-                return super.keyPressed(key);
+                return super.keyPressed(event);
         }
-        return super.keyPressed(key);
+        return super.keyPressed(event);
     }
 
     @Override
-    public boolean keyReleased(KeyInput key) {
-        int code = key.key();
-        switch (code) {
+    public boolean keyReleased(final KeyEvent event) {
+        int keyCode = event.key();
+        switch (keyCode) {
             case GLFW.GLFW_KEY_W -> keys[0] = false;
             case GLFW.GLFW_KEY_A -> keys[1] = false;
             case GLFW.GLFW_KEY_S -> keys[2] = false;
             case GLFW.GLFW_KEY_D -> keys[3] = false;
             case GLFW.GLFW_KEY_LEFT_SHIFT, GLFW.GLFW_KEY_RIGHT_SHIFT -> keys[4] = false;
         }
-        return super.keyReleased(key);
+        return super.keyReleased(event);
     }
 
     private void clampCamera() {
-        cameraX = MathHelper.clamp(cameraX, -WORLD_HALF, WORLD_HALF);
-        cameraY = MathHelper.clamp(cameraY, -WORLD_HALF, WORLD_HALF);
+        cameraX = Mth.clamp(cameraX, -WORLD_HALF, WORLD_HALF);
+        cameraY = Mth.clamp(cameraY, -WORLD_HALF, WORLD_HALF);
     }
 
-
-
-    // ---------- Tick ----------
     @Override
     public void tick() {
         if (animatingCamera) {
@@ -349,7 +337,7 @@ public class IdlecraftScreen extends Screen {
         if (keys[3]) cameraX += speed;
         clampCamera();
 
-        java.util.List<String> serverUnlocked = ClientState.getUnlockedNodes();
+        List<String> serverUnlocked = ClientState.getUnlockedNodes();
         for (SkillNode n : nodes.values()) {
             boolean wasUnlocked = n.unlocked;
             n.unlocked = serverUnlocked.contains(n.id);
@@ -395,28 +383,27 @@ public class IdlecraftScreen extends Screen {
                 double radius = Math.min(this.width, this.height) / 2.0 - 50;
                 double bx = this.width / 2.0 + Math.cos(returnAngle) * radius;
                 double by = this.height / 2.0 + Math.sin(returnAngle) * radius;
-                returnX = (int)MathHelper.clamp(bx, 40, this.width - 40);
-                returnY = (int)MathHelper.clamp(by, 40, this.height - 40);
+                returnX = (int)Mth.clamp(bx, 40, this.width - 40);
+                returnY = (int)Mth.clamp(by, 40, this.height - 40);
             }
         }
-        returnAlpha = MathHelper.lerp(0.2f, returnAlpha, target);
+        returnAlpha = Mth.lerp(0.2f, returnAlpha, target);
     }
 
-    // ---------- Render ----------
     @Override
-    public void render(DrawContext ctx, int mx, int my, float delta) {
-        ctx.fill(0, 0, this.width, this.height, 0xC0101014);
-        boolean debug = DebugState.isAvailable(this.client != null ? this.client.player : null);
-        if (debug) renderGrid(ctx);
-        renderConnections(ctx);
+    public void extractRenderState(GuiGraphicsExtractor guiGraphics, int mouseX, int mouseY, float partialTick) {
+        guiGraphics.fill(0, 0, this.width, this.height, 0xC0101014);
+        boolean debug = DebugState.isAvailable(this.minecraft != null ? this.minecraft.player : null);
+        if (debug) renderGrid(guiGraphics);
+        renderConnections(guiGraphics);
 
         hoverNode = null;
-        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
+        for (SkillNode n : nodes.values()) {
             if (!isNodeVisible(n)) continue;
             int half = (int)(n.size * zoom / 2);
             int cx = worldToScreenX(n.x);
             int cy = worldToScreenY(n.y);
-            if (mx >= cx - half && mx <= cx + half && my >= cy - half && my <= cy + half) {
+            if (mouseX >= cx - half && mouseX <= cx + half && mouseY >= cy - half && mouseY <= cy + half) {
                 hoverNode = n;
                 break;
             }
@@ -429,47 +416,46 @@ public class IdlecraftScreen extends Screen {
             if (!prevHovering && prevCtrlHeld) {
                 expandLinear = 1.0f;
             } else {
-                expandLinear = Math.min(1.0f, expandLinear + delta / 10.0f);
+                expandLinear = Math.min(1.0f, expandLinear + partialTick / 10.0f);
             }
         } else {
-            expandLinear = Math.max(0.0f, expandLinear - delta / 10.0f);
+            expandLinear = Math.max(0.0f, expandLinear - partialTick / 10.0f);
         }
         expandProgress = expandLinear * expandLinear;
         prevCtrlHeld = ctrlHeld;
         prevHovering = hovering;
 
-        renderFlash(ctx);
+        renderFlash(guiGraphics);
 
         if (hoverNode != null) {
-            renderTooltip(ctx, hoverNode, mx, my);
+            renderTooltip(guiGraphics, hoverNode, mouseX, mouseY);
         } else {
-            tooltipFade = Math.max(0.0f, tooltipFade - delta / 20.0f);
+            tooltipFade = Math.max(0.0f, tooltipFade - partialTick / 20.0f);
         }
 
         if (tooltipFade > 0.01f) {
-            int darkAlpha = (int)(0xCC * tooltipFade);  // 80% вместо 50%
-            ctx.fill(0, 0, this.width, this.height, (darkAlpha << 24));
+            int darkAlpha = (int)(0xCC * tooltipFade);
+            guiGraphics.fill(0, 0, this.width, this.height, (darkAlpha << 24));
         }
 
-        for (io.github.mermagudyan.idlecraft.screen.SkillNode n : nodes.values()) {
+        for (SkillNode n : nodes.values()) {
             if (!isNodeVisible(n)) continue;
             boolean dim = (hoverNode != null && n != hoverNode);
-            renderNode(ctx, n, mx, my, dim);
+            renderNode(guiGraphics, n, mouseX, mouseY, dim);
         }
 
         if (hoverNode != null) {
-            renderTooltip(ctx, hoverNode, mx, my);
+            renderTooltip(guiGraphics, hoverNode, mouseX, mouseY);
         }
 
-        renderPoints(ctx);
-        renderReturnButton(ctx);
-        updateCameraAnim(delta);
-        renderHud(ctx);
-        super.render(ctx, mx, my, delta);
-
+        renderPoints(guiGraphics);
+        renderReturnButton(guiGraphics);
+        updateCameraAnim(partialTick);
+        renderHud(guiGraphics);
+        super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
-    private void renderGrid(DrawContext ctx) {
+    private void renderGrid(GuiGraphicsExtractor guiGraphics) {
         int spacing = 100;
         if ((int)(spacing * zoom) < 8) return;
         float left = cameraX - (float)(this.width / 2.0 / zoom);
@@ -478,18 +464,16 @@ public class IdlecraftScreen extends Screen {
         float bottom = cameraY + (float)(this.height / 2.0 / zoom);
         for (float wx = (float)Math.floor(left / spacing) * spacing; wx < right; wx += spacing) {
             int sx = worldToScreenX(wx);
-            ctx.fill(sx, 0, sx + 1, this.height, 0x22FFFFFF);
+            guiGraphics.fill(sx, 0, sx + 1, this.height, 0x22FFFFFF);
         }
         for (float wy = (float)Math.floor(top / spacing) * spacing; wy < bottom; wy += spacing) {
             int sy = worldToScreenY(wy);
-            ctx.fill(0, sy, this.width, sy + 1, 0x22FFFFFF);
+            guiGraphics.fill(0, sy, this.width, sy + 1, 0x22FFFFFF);
         }
         int ox = worldToScreenX(0), oy = worldToScreenY(0);
-        if (ox >= 0 && ox < this.width)  ctx.fill(ox, 0, ox + 1, this.height, 0x66FFFFFF);
-        if (oy >= 0 && oy < this.height) ctx.fill(0, oy, this.width, oy + 1, 0x66FFFFFF);
+        if (ox >= 0 && ox < this.width)  guiGraphics.fill(ox, 0, ox + 1, this.height, 0x66FFFFFF);
+        if (oy >= 0 && oy < this.height) guiGraphics.fill(0, oy, this.width, oy + 1, 0x66FFFFFF);
     }
-
-    private float tooltipFade = 0.0f;
 
     private boolean shouldDrawLine(SkillNode child) {
         return isNodeVisible(child);
@@ -507,7 +491,7 @@ public class IdlecraftScreen extends Screen {
         return true;
     }
 
-    private void renderConnections(DrawContext ctx) {
+    private void renderConnections(GuiGraphicsExtractor guiGraphics) {
         for (SkillNode n : nodes.values()) {
             if (n.parentId == null) continue;
             SkillNode p = nodes.get(n.parentId);
@@ -522,33 +506,26 @@ public class IdlecraftScreen extends Screen {
             int color = (p.unlocked && n.unlocked) ? 0xFF55FF55
                     : p.unlocked ? 0xFFAAAA55 : 0xFF555555;
 
-            drawLine(ctx, x1, y1, x2, y2, color);
+            drawLine(guiGraphics, x1, y1, x2, y2, color);
         }
     }
 
-    private String maskIfLocked(SkillNode n, String text) {
-        if (!n.unlocked && !isConditionMet(n)) {
-            return "???";
-        }
-        return text;
-    }
-
-    private void drawLine(DrawContext ctx, int x1, int y1, int x2, int y2, int color) {
+    private void drawLine(GuiGraphicsExtractor guiGraphics, int x1, int y1, int x2, int y2, int color) {
         int dx = Math.abs(x2 - x1);
         int dy = Math.abs(y2 - y1);
         int steps = Math.max(dx, dy);
         if (steps == 0) {
-            ctx.fill(x1 - 1, y1 - 1, x1 + 1, y1 + 1, color);
+            guiGraphics.fill(x1 - 1, y1 - 1, x1 + 1, y1 + 1, color);
             return;
         }
         for (int i = 0; i <= steps; i++) {
             int x = x1 + (x2 - x1) * i / steps;
             int y = y1 + (y2 - y1) * i / steps;
-            ctx.fill(x - 1, y - 1, x + 1, y + 1, color);
+            guiGraphics.fill(x - 1, y - 1, x + 1, y + 1, color);
         }
     }
 
-    private void renderNode(DrawContext ctx, SkillNode n, int mx, int my, boolean dim) {
+    private void renderNode(GuiGraphicsExtractor guiGraphics, SkillNode n, int mx, int my, boolean dim) {
         int shakeX = 0, shakeY = 0;
         if (pressedNode == n && holdProgress > 0) {
             shakeX = (int)((Math.random() - 0.5) * 3);
@@ -566,76 +543,75 @@ public class IdlecraftScreen extends Screen {
         if (pressedNode == n && holdProgress > 0 && !masked) {
             int bloom = (int)(half * (1 + 0.4f * holdProgress));
             int bloomAlpha = (int)(holdProgress * 100);
-            ctx.fill(cx - bloom, cy - bloom, cx + bloom, cy + bloom, (bloomAlpha << 24) | 0x00FFFFFF);
+            guiGraphics.fill(cx - bloom, cy - bloom, cx + bloom, cy + bloom, (bloomAlpha << 24) | 0x00FFFFFF);
         }
 
         int fill = n.unlocked ? (dim ? 0xFF182820 : 0xE0205030)
                 : (masked ? (dim ? 0xFF141414 : 0xE01A1A1A)
                    : (hovered ? 0xE0404048 : (dim ? 0xFF181820 : 0xE0282830)));
-        ctx.fill(x1, y1, x2, y2, fill);
+        guiGraphics.fill(x1, y1, x2, y2, fill);
 
         int border = n.unlocked ? (dim ? 0xFF305530 : 0xFF55FF55)
                 : (masked ? (dim ? 0xFF333333 : 0xFF555555)
                    : (pressedNode == n ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF)
                       : (hovered ? (dim ? 0xFFCCCCCC : 0xFFFFFFFF) : (dim ? 0xFF444444 : 0xFF888888))));
-        ctx.fill(x1, y1, x2, y1 + 1, border);
-        ctx.fill(x1, y2 - 1, x2, y2, border);
-        ctx.fill(x1, y1, x1 + 1, y2, border);
-        ctx.fill(x2 - 1, y1, x2, y2, border);
+        guiGraphics.fill(x1, y1, x2, y1 + 1, border);
+        guiGraphics.fill(x1, y2 - 1, x2, y2, border);
+        guiGraphics.fill(x1, y1, x1 + 1, y2, border);
+        guiGraphics.fill(x2 - 1, y1, x2, y2, border);
 
         if (pressedNode == n && holdProgress > 0 && !masked) {
             int fillH = (int)((y2 - y1) * holdProgress);
             int fillAlpha = (int)(holdProgress * 180);
-            ctx.fill(x1, y2 - fillH, x2, y2, (fillAlpha << 24) | 0x00FFFFFF);
+            guiGraphics.fill(x1, y2 - fillH, x2, y2, (fillAlpha << 24) | 0x00FFFFFF);
         }
 
         float iconSize = Math.max(8, n.size * zoom * 0.5f);
         float scale = iconSize / 16f;
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().translate(cx - iconSize / 2, cy - iconSize / 2);
-        ctx.getMatrices().scale(scale, scale);
+        guiGraphics.pose().pushMatrix();
+        guiGraphics.pose().translate(cx - iconSize / 2, cy - iconSize / 2);
+        guiGraphics.pose().scale(scale, scale);
 
         Item iconToDraw = masked ? Items.BARRIER : n.icon;
-        ctx.drawItem(new ItemStack(iconToDraw), 0, 0);
-        ctx.getMatrices().popMatrix();
+        guiGraphics.item(new ItemStack(iconToDraw), 0, 0);
+        guiGraphics.pose().popMatrix();
 
         if (zoom > 0.4f) {
             int labelY = y2 + 4;
             String name = masked ? "???" : n.name;
-            ctx.drawTextWithShadow(this.textRenderer,
-                    Text.literal(name).formatted(n.unlocked ? Formatting.GREEN : Formatting.WHITE),
-                    cx - this.textRenderer.getWidth(name) / 2, labelY,
-                    dim ? 0x80FFFFFF : 0xFFFFFFFF);
+            guiGraphics.text(this.font,
+                    Component.literal(name).withStyle(n.unlocked ? ChatFormatting.GREEN : ChatFormatting.WHITE),
+                    cx - this.font.width(name) / 2, labelY,
+                    dim ? 0x80FFFFFF : 0xFFFFFFFF, true);
         }
     }
 
-    private void renderFlash(DrawContext ctx) {
+    private void renderFlash(GuiGraphicsExtractor guiGraphics) {
         if (flashNode == null || flashTime <= 0) return;
         int cx = worldToScreenX(flashNode.x);
         int cy = worldToScreenY(flashNode.y);
         int alpha = (int)(flashTime * 255) & 0xFF;
         int half = (int)(flashNode.size * zoom * (1 + (1 - flashTime) * 2.5f) / 2);
-        // Expanding ring
-        ctx.fill(cx - half, cy - half, cx + half, cy - half + 2, (alpha << 24) | 0x00FFFFFF);
-        ctx.fill(cx - half, cy + half - 2, cx + half, cy + half, (alpha << 24) | 0x00FFFFFF);
-        ctx.fill(cx - half, cy - half, cx - half + 2, cy + half, (alpha << 24) | 0x00FFFFFF);
-        ctx.fill(cx + half - 2, cy - half, cx + half, cy + half, (alpha << 24) | 0x00FFFFFF);
-        // Node flash overlay
+        guiGraphics.fill(cx - half, cy - half, cx + half, cy - half + 2, (alpha << 24) | 0x00FFFFFF);
+        guiGraphics.fill(cx - half, cy + half - 2, cx + half, cy + half, (alpha << 24) | 0x00FFFFFF);
+        guiGraphics.fill(cx - half, cy - half, cx - half + 2, cy + half, (alpha << 24) | 0x00FFFFFF);
+        guiGraphics.fill(cx + half - 2, cy - half, cx + half, cy + half, (alpha << 24) | 0x00FFFFFF);
         int nh = (int)(flashNode.size * zoom / 2);
-        ctx.fill(cx - nh, cy - nh, cx + nh, cy + nh, (alpha << 24) | 0x00FFFFFF);
+        guiGraphics.fill(cx - nh, cy - nh, cx + nh, cy + nh, (alpha << 24) | 0x00FFFFFF);
     }
 
-    private void renderPoints(DrawContext ctx) {
+    private void renderPoints(GuiGraphicsExtractor guiGraphics) {
         String text = "Points: " + ClientState.getPoints();
-        int w = this.textRenderer.getWidth(text) + 16;
+        int w = this.font.width(text) + 16;
         int x = this.width - w - 10, y = 10;
-        ctx.fill(x, y, x + w, y + 20, 0x80000000);
-        ctx.fill(x, y, x + 1, y + 20, 0xFFAAAAFF);
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(text),
-                x + 8, y + 6, 0xFF55FFFF);
+        guiGraphics.fill(x, y, x + w, y + 20, 0x80000000);
+        guiGraphics.fill(x, y, x + 1, y + 20, 0xFFAAAAFF);
+        guiGraphics.text(this.font,
+                Component.literal(text),
+                x + 8, y + 6, 0xFF55FFFF, true);
     }
-    private void renderTooltip(DrawContext ctx, SkillNode n, int mx, int my) {
+
+    private void renderTooltip(GuiGraphicsExtractor guiGraphics, SkillNode n, int mx, int my) {
         if (n == null) return;
         int pad = 6;
         int lineH = 11;
@@ -696,13 +672,13 @@ public class IdlecraftScreen extends Screen {
             }
         }
 
-        int wName = this.textRenderer.getWidth(nameStr);
-        int wDesc = this.textRenderer.getWidth(descStr);
-        int wCost = this.textRenderer.getWidth(costStr);
-        int wPts  = this.textRenderer.getWidth(pointsStr);
-        int wCond = condStr != null ? this.textRenderer.getWidth(condStr) : 0;
-        int wGrants = grantsStr != null ? this.textRenderer.getWidth(grantsStr) : 0;
-        int wUnlocks = unlocksStr != null ? this.textRenderer.getWidth(unlocksStr) : 0;
+        int wName = this.font.width(nameStr);
+        int wDesc = this.font.width(descStr);
+        int wCost = this.font.width(costStr);
+        int wPts  = this.font.width(pointsStr);
+        int wCond = condStr != null ? this.font.width(condStr) : 0;
+        int wGrants = grantsStr != null ? this.font.width(grantsStr) : 0;
+        int wUnlocks = unlocksStr != null ? this.font.width(unlocksStr) : 0;
 
         int maxW = Math.max(Math.max(Math.max(wName, wDesc), wCost), Math.max(wPts, Math.max(wCond, Math.max(wGrants, wUnlocks))));
         int w = maxW + pad * 2;
@@ -715,106 +691,98 @@ public class IdlecraftScreen extends Screen {
         int halfNode = (int)(n.size * zoom / 2);
 
         int x = nodeScreenX - w / 2;
-        boolean aboveNode = true;
         int y = nodeScreenY - halfNode - h - 8;
         if (y < 4) {
-            aboveNode = false;
             y = nodeScreenY + halfNode + 8;
         }
         if (x < 4) x = 4;
         if (x + w > this.width - 4) x = this.width - w - 4;
         int bottom = y + h;
 
-        ctx.fill(x, y, x + w, y + h, 0xF0000000);
-        ctx.fill(x, y, x + w, y + 1, 0xFFAAAAFF);
-        ctx.fill(x, y + h - 1, x + w, y + h, 0xFFAAAAFF);
-        ctx.fill(x, y, x + 1, y + h, 0xFFAAAAFF);
-        ctx.fill(x + w - 1, y, x + w, y + h, 0xFFAAAAFF);
+        guiGraphics.fill(x, y, x + w, y + h, 0xF0000000);
+        guiGraphics.fill(x, y, x + w, y + 1, 0xFFAAAAFF);
+        guiGraphics.fill(x, y + h - 1, x + w, y + h, 0xFFAAAAFF);
+        guiGraphics.fill(x, y, x + 1, y + h, 0xFFAAAAFF);
+        guiGraphics.fill(x + w - 1, y, x + w, y + h, 0xFFAAAAFF);
 
         int textY = y + pad;
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(nameStr).formatted(n.unlocked ? Formatting.GREEN : Formatting.WHITE),
-                x + pad, textY, 0xFFFFFFFF);
+        guiGraphics.text(this.font,
+                Component.literal(nameStr).withStyle(n.unlocked ? ChatFormatting.GREEN : ChatFormatting.WHITE),
+                x + pad, textY, 0xFFFFFFFF, true);
         textY += lineH;
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(descStr).formatted(Formatting.GRAY),
-                x + pad, textY, 0xFFAAAAAA);
+        guiGraphics.text(this.font,
+                Component.literal(descStr).withStyle(ChatFormatting.GRAY),
+                x + pad, textY, 0xFFAAAAAA, true);
         textY += lineH;
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(costStr).formatted(Formatting.GOLD),
-                x + pad, textY, 0xFFFFAA00);
+        guiGraphics.text(this.font,
+                Component.literal(costStr).withStyle(ChatFormatting.GOLD),
+                x + pad, textY, 0xFFFFAA00, true);
         textY += lineH;
         if (condStr != null) {
             int condColor = conditionMet ? 0xFF55FF55 : 0xFFFF5555;
-            ctx.drawTextWithShadow(this.textRenderer, Text.literal(condStr), x + pad, textY, condColor);
+            guiGraphics.text(this.font, Component.literal(condStr), x + pad, textY, condColor, true);
             textY += lineH;
         }
-        ctx.drawTextWithShadow(this.textRenderer, Text.literal(pointsStr), x + pad, textY, 0xFF55FFFF);
+        guiGraphics.text(this.font, Component.literal(pointsStr), x + pad, textY, 0xFF55FFFF, true);
 
         int extraTextY = textY + lineH;
         if (grantsStr != null && expandProgress > 0.01f) {
             if (extraTextY + lineH <= bottom) {
-                ctx.drawTextWithShadow(this.textRenderer,
-                        Text.literal(grantsStr).formatted(Formatting.AQUA),
-                        x + pad, extraTextY, 0xFF55FFFF);
+                guiGraphics.text(this.font,
+                        Component.literal(grantsStr).withStyle(ChatFormatting.AQUA),
+                        x + pad, extraTextY, 0xFF55FFFF, true);
             }
             extraTextY += lineH;
         }
         if (unlocksStr != null && expandProgress > 0.5f) {
             if (extraTextY + lineH <= bottom) {
-                ctx.drawTextWithShadow(this.textRenderer,
-                        Text.literal(unlocksStr).formatted(Formatting.LIGHT_PURPLE),
-                        x + pad, extraTextY, 0xFFFF55FF);
+                guiGraphics.text(this.font,
+                        Component.literal(unlocksStr).withStyle(ChatFormatting.LIGHT_PURPLE),
+                        x + pad, extraTextY, 0xFFFF55FF, true);
             }
         }
     }
-    private void renderReturnButton(DrawContext ctx) {
+
+    private void renderReturnButton(GuiGraphicsExtractor guiGraphics) {
         if (returnAlpha < 0.02f) return;
         int a = (int)(returnAlpha * 255) & 0xFF;
         int r = 16;
         int x1 = returnX - r, y1 = returnY - r, x2 = returnX + r, y2 = returnY + r;
-        ctx.fill(x1, y1, x2, y2, (a << 24) | 0x00404048);
-        ctx.fill(x1, y1, x2, y1 + 1, (a << 24) | 0x00FFFFFF);
-        ctx.fill(x1, y2 - 1, x2, y2, (a << 24) | 0x00FFFFFF);
-        ctx.fill(x1, y1, x1 + 1, y2, (a << 24) | 0x00FFFFFF);
-        ctx.fill(x2 - 1, y1, x2, y2, (a << 24) | 0x00FFFFFF);
+        guiGraphics.fill(x1, y1, x2, y2, (a << 24) | 0x00404048);
+        guiGraphics.fill(x1, y1, x2, y1 + 1, (a << 24) | 0x00FFFFFF);
+        guiGraphics.fill(x1, y2 - 1, x2, y2, (a << 24) | 0x00FFFFFF);
+        guiGraphics.fill(x1, y1, x1 + 1, y2, (a << 24) | 0x00FFFFFF);
+        guiGraphics.fill(x2 - 1, y1, x2, y2, (a << 24) | 0x00FFFFFF);
 
-        // Rotated arrow ">" pointing toward target
-        ctx.getMatrices().pushMatrix();
-        ctx.getMatrices().translate(returnX, returnY);
-        ctx.getMatrices().rotate(returnAngle);
-        ctx.getMatrices().scale(1.5f, 1.5f);
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(">"), -this.textRenderer.getWidth(">") / 2, -4,
+        guiGraphics.pose().pushMatrix();
+        guiGraphics.pose().translate(returnX, returnY);
+        guiGraphics.pose().rotate(returnAngle);
+        guiGraphics.pose().scale(1.5F, 1.5F);
+        guiGraphics.text(this.font,
+                Component.literal(">"), -this.font.width(">") / 2, -4,
                 (a << 24) | 0x00FFFFFF);
-        ctx.getMatrices().popMatrix();
+        guiGraphics.pose().popMatrix();
     }
 
-    private void renderHud(DrawContext ctx) {
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(String.format("Zoom: %.0f%%", zoom * 100)).formatted(Formatting.WHITE),
-                10, 10, 0xFFFFFF);
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal(String.format("Cam:  %.0f, %.0f", cameraX, cameraY)).formatted(Formatting.WHITE),
-                10, 22, 0xFFFFFF);
-        ctx.drawTextWithShadow(this.textRenderer,
-                Text.literal("WASD/LMB=pan | Shift=fast | Wheel=zoom | HOLD node=upgrade | ESC=close")
-                        .formatted(Formatting.GRAY),
-                10, this.height - 35, 0xFFFFFF);
+    private void renderHud(GuiGraphicsExtractor guiGraphics) {
+        guiGraphics.text(this.font,
+                Component.literal(String.format("Zoom: %.0f%%", zoom * 100)).withStyle(ChatFormatting.WHITE),
+                10, 10, 0xFFFFFF, true);
+        guiGraphics.text(this.font,
+                Component.literal(String.format("Cam:  %.0f, %.0f", cameraX, cameraY)).withStyle(ChatFormatting.WHITE),
+                10, 22, 0xFFFFFF, true);
+        guiGraphics.text(this.font,
+                Component.literal("WASD/LMB=pan | Shift=fast | Wheel=zoom | HOLD node=upgrade | ESC=close")
+                        .withStyle(ChatFormatting.GRAY),
+                10, this.height - 35, 0xFFFFFF, true);
     }
 
     @Override
-    public boolean shouldPause() { return false; }
+    public boolean isPauseScreen() { return false; }
 
     private boolean isCtrlHeld() {
-        if (this.client == null) return false;
-        return net.minecraft.client.util.InputUtil.isKeyPressed(
-                this.client.getWindow(),
-                org.lwjgl.glfw.GLFW.GLFW_KEY_LEFT_CONTROL)
-                || net.minecraft.client.util.InputUtil.isKeyPressed(
-                this.client.getWindow(),
-                org.lwjgl.glfw.GLFW.GLFW_KEY_RIGHT_CONTROL);
+        if (this.minecraft == null) return false;
+        return InputConstants.isKeyDown(this.minecraft.getWindow(), GLFW.GLFW_KEY_LEFT_CONTROL)
+                || InputConstants.isKeyDown(this.minecraft.getWindow(), GLFW.GLFW_KEY_RIGHT_CONTROL);
     }
-
-
 }

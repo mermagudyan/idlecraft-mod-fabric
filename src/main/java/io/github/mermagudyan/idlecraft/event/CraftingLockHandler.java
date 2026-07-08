@@ -2,13 +2,11 @@ package io.github.mermagudyan.idlecraft.event;
 
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.ClientState;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.registry.tag.ItemTags;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 
 import java.util.List;
 
@@ -17,43 +15,28 @@ public class CraftingLockHandler {
     private static final int INVENTORY_GRID = 4;
     private static final int TABLE_GRID = 9;
 
-    public static boolean isCraftingLocked(PlayerEntity player, int gridSize, ItemStack result) {
+    public static boolean isCraftingLocked(Player player, int gridSize, ItemStack result) {
         if (result.isEmpty()) return false;
 
-        boolean isClient = player.getEntityWorld().isClient();
-        List<String> unlocked;
-
-        if (isClient) {
-            unlocked = ClientState.getUnlockedNodes();
-        } else {
-            MinecraftServer server = player.getEntityWorld().getServer();
-            if (server == null) return false;
-            unlocked = PlayerData.getServer(server).getUnlockedNodes(player.getUuid());
-        }
-
-        if (gridSize == 4) {
-            if (result.getItem() == Items.CRAFTING_TABLE) {
-                return !unlocked.contains("village_visit");
-            }
+        if (gridSize == INVENTORY_GRID) {
+            sendMessage(player, player.level().isClientSide());
             return true;
         }
 
-        if (gridSize == 9) {
+        if (gridSize == TABLE_GRID) {
+            boolean isClient = player.level().isClientSide();
+            List<String> unlocked;
+
+            if (isClient) {
+                unlocked = ClientState.getUnlockedNodes();
+            } else {
+                MinecraftServer server = player.level().getServer();
+                if (server == null) return false;
+                unlocked = PlayerData.getServer(server).getUnlockedNodes(player.getUUID());
+            }
+
             if (!unlocked.contains("crafting_table_unlock")) {
-                return true;
-            }
-
-            if (result.getItem() == Items.WOODEN_PICKAXE
-                    || result.getItem() == Items.WOODEN_SHOVEL
-                    || result.getItem() == Items.WOODEN_AXE
-                    || result.getItem() == Items.WOODEN_SWORD) {
-                return !unlocked.contains("wooden_tools");
-            }
-
-            if (result.isIn(ItemTags.PLANKS) && !unlocked.contains("sticky")) {
-                return true;
-            }
-            if (result.getItem() == Items.STICK && !unlocked.contains("sticky")) {
+                sendMessage(player, isClient);
                 return true;
             }
         }
@@ -61,12 +44,11 @@ public class CraftingLockHandler {
         return false;
     }
 
-    private static void sendMessage(PlayerEntity player, boolean isClient) {
+    private static void sendMessage(Player player, boolean isClient) {
         if (isClient) return;
-        player.sendMessage(
-                Text.literal("Crafting is locked! Unlock the required node first.")
-                        .formatted(Formatting.RED),
-                true
+        player.sendSystemMessage(
+                Component.literal("Crafting is locked! Use a crafting table or unlock the required node.")
+                        .withStyle(ChatFormatting.RED)
         );
     }
 }

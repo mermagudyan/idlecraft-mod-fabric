@@ -4,7 +4,7 @@ import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -17,12 +17,12 @@ public class PlayerJoinHandler {
 
     public static void register() {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
-            UUID id = handler.getPlayer().getUuid();
+            UUID id = handler.getPlayer().getUUID();
             pendingSyncs.put(id, 40);
         });
 
         ServerPlayConnectionEvents.DISCONNECT.register((handler, server) -> {
-            pendingSyncs.remove(handler.getPlayer().getUuid());
+            pendingSyncs.remove(handler.getPlayer().getUUID());
         });
 
         ServerTickEvents.END_SERVER_TICK.register(server -> {
@@ -31,7 +31,7 @@ public class PlayerJoinHandler {
                 Map.Entry<UUID, Integer> entry = it.next();
                 int ticks = entry.getValue() - 1;
                 if (ticks <= 0) {
-                    ServerPlayerEntity player = server.getPlayerManager().getPlayer(entry.getKey());
+                    ServerPlayer player = server.getPlayerList().getPlayer(entry.getKey());
                     if (player != null) {
                         IdlecraftNetworking.syncPointsToClient(player);
                         IdlecraftNetworking.syncNodesToClient(player);

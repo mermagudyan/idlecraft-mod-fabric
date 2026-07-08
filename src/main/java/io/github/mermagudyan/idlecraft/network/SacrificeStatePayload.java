@@ -1,23 +1,23 @@
 package io.github.mermagudyan.idlecraft.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public record SacrificeStatePayload(Map<String, int[]> progress) implements CustomPayload {
-    public static final Id<SacrificeStatePayload> ID =
-            new Id<>(Identifier.of("idlecraft", "sacrifice_state"));
+public record SacrificeStatePayload(Map<String, int[]> progress) implements CustomPacketPayload {
+    public static final CustomPacketPayload.Type<SacrificeStatePayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("idlecraft", "sacrifice_state"));
 
-    public static final PacketCodec<RegistryByteBuf, SacrificeStatePayload> CODEC =
-            PacketCodec.of(
-                    (value, buf) -> {
+    public static final StreamCodec<RegistryFriendlyByteBuf, SacrificeStatePayload> STREAM_CODEC =
+            StreamCodec.of(
+                    (buf, value) -> {
                         buf.writeVarInt(value.progress().size());
                         for (var entry : value.progress().entrySet()) {
-                            buf.writeString(entry.getKey());
+                            buf.writeUtf(entry.getKey());
                             buf.writeVarInt(entry.getValue().length);
                             for (int v : entry.getValue()) buf.writeVarInt(v);
                         }
@@ -26,7 +26,7 @@ public record SacrificeStatePayload(Map<String, int[]> progress) implements Cust
                         int size = buf.readVarInt();
                         Map<String, int[]> map = new HashMap<>();
                         for (int i = 0; i < size; i++) {
-                            String key = buf.readString();
+                            String key = buf.readUtf();
                             int len = buf.readVarInt();
                             int[] arr = new int[len];
                             for (int j = 0; j < len; j++) arr[j] = buf.readVarInt();
@@ -37,5 +37,5 @@ public record SacrificeStatePayload(Map<String, int[]> progress) implements Cust
             );
 
     @Override
-    public Id<? extends CustomPayload> getId() { return ID; }
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
 }

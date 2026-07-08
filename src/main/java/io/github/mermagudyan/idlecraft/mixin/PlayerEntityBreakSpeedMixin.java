@@ -1,26 +1,26 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
 import io.github.mermagudyan.idlecraft.event.StickToolHandler;
-import net.minecraft.block.BlockState;
-import net.minecraft.entity.player.PlayerEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(PlayerEntity.class)
+@Mixin(Player.class)
 public abstract class PlayerEntityBreakSpeedMixin {
 
-    @Inject(method = "getBlockBreakingSpeed", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "getDestroySpeed", at = @At("RETURN"), cancellable = true)
     private void slowBreak(BlockState block, CallbackInfoReturnable<Float> cir) {
-        PlayerEntity self = (PlayerEntity) (Object) this;
+        Player self = (Player) (Object) this;
         boolean isSurvival = !self.isCreative() && !self.isSpectator();
         if (!isSurvival) return;
 
-        float hardness = block.getHardness(self.getEntityWorld(), self.getBlockPos());
-        ItemStack mainHand = self.getMainHandStack();
+        float hardness = block.getDestroySpeed(self.level(), self.blockPosition());
+        ItemStack mainHand = self.getMainHandItem();
         boolean isTool = StickToolHandler.isToolOrStick(mainHand);
 
         if (mainHand.getItem() == Items.STICK && StickToolHandler.isWoodBlock(block)) {
@@ -45,14 +45,14 @@ public abstract class PlayerEntityBreakSpeedMixin {
     }
 
     private boolean isDirtLikeBlock(BlockState state) {
-        return state.isIn(net.minecraft.registry.tag.BlockTags.DIRT) ||
-                state.isOf(net.minecraft.block.Blocks.GRASS_BLOCK) ||
-                state.isOf(net.minecraft.block.Blocks.MYCELIUM) ||
-                state.isOf(net.minecraft.block.Blocks.PODZOL) ||
-                state.isOf(net.minecraft.block.Blocks.COARSE_DIRT) ||
-                state.isOf(net.minecraft.block.Blocks.ROOTED_DIRT) ||
-                state.isOf(net.minecraft.block.Blocks.MOSS_BLOCK) ||
-                state.isOf(net.minecraft.block.Blocks.FARMLAND) ||
-                state.isOf(net.minecraft.block.Blocks.DIRT_PATH);
+        return state.is(net.minecraft.tags.BlockTags.DIRT) ||
+                state.is(net.minecraft.world.level.block.Blocks.GRASS_BLOCK) ||
+                state.is(net.minecraft.world.level.block.Blocks.MYCELIUM) ||
+                state.is(net.minecraft.world.level.block.Blocks.PODZOL) ||
+                state.is(net.minecraft.world.level.block.Blocks.COARSE_DIRT) ||
+                state.is(net.minecraft.world.level.block.Blocks.ROOTED_DIRT) ||
+                state.is(net.minecraft.world.level.block.Blocks.MOSS_BLOCK) ||
+                state.is(net.minecraft.world.level.block.Blocks.FARMLAND) ||
+                state.is(net.minecraft.world.level.block.Blocks.DIRT_PATH);
     }
 }

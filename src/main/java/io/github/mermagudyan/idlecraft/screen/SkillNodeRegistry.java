@@ -1,6 +1,6 @@
 package io.github.mermagudyan.idlecraft.screen;
 
-import net.minecraft.item.Items;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;

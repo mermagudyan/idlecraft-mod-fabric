@@ -2,39 +2,40 @@ package io.github.mermagudyan.idlecraft.event;
 
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import net.fabricmc.fabric.api.event.player.PlayerBlockBreakEvents;
-import net.minecraft.block.BlockState;
-import net.minecraft.block.Blocks;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
+import net.minecraft.ChatFormatting;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
-import net.minecraft.registry.tag.ItemTags;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.ItemTags;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 public class StickToolHandler {
 
     public static void register() {
         PlayerBlockBreakEvents.BEFORE.register((world, player, pos, state, blockEntity) -> {
-            if (world.isClient()) return true;
-            if (!(player instanceof ServerPlayerEntity serverPlayer)) return true;
+            if (world.isClientSide()) return true;
+            if (!(player instanceof ServerPlayer serverPlayer)) return true;
 
             if (serverPlayer.isCreative()) return true;
 
-            MinecraftServer server = serverPlayer.getEntityWorld().getServer();
+            MinecraftServer server = serverPlayer.level().getServer();
             if (server == null) return true;
             PlayerData data = PlayerData.getServer(server);
-            boolean hasStart = data.getUnlockedNodes(serverPlayer.getUuid()).contains("start");
+            boolean hasStart = data.getUnlockedNodes(serverPlayer.getUUID()).contains("start");
 
-            ItemStack mainHand = serverPlayer.getMainHandStack();
+            ItemStack mainHand = serverPlayer.getMainHandItem();
 
             if (mainHand.getItem() == Items.STICK) {
                 boolean isWood = isWoodBlock(state);
                 if (isWood && hasStart) {
-                    mainHand.decrement(1);
+                    mainHand.shrink(1);
                     if (mainHand.isEmpty()) {
-                        serverPlayer.sendMessage(
-                                Text.literal("Your stick broke!").formatted(Formatting.GRAY),
+                        serverPlayer.sendSystemMessage(
+                                Component.literal("Your stick broke!").withStyle(ChatFormatting.GRAY),
                                 true
                         );
                     }
@@ -47,18 +48,18 @@ public class StickToolHandler {
 
     public static boolean isToolOrStick(ItemStack stack) {
         if (stack.isEmpty()) return false;
-        return stack.isIn(ItemTags.PICKAXES)
-                || stack.isIn(ItemTags.AXES)
-                || stack.isIn(ItemTags.SHOVELS)
-                || stack.isIn(ItemTags.HOES)
-                || stack.isIn(ItemTags.SWORDS)
+        return stack.is(ItemTags.PICKAXES)
+                || stack.is(ItemTags.AXES)
+                || stack.is(ItemTags.SHOVELS)
+                || stack.is(ItemTags.HOES)
+                || stack.is(ItemTags.SWORDS)
                 || stack.getItem() == Items.STICK;
     }
 
     public static boolean isWoodBlock(BlockState state) {
-        return state.isIn(net.minecraft.registry.tag.BlockTags.LOGS) ||
-                state.isOf(Blocks.MUSHROOM_STEM) ||
-                state.isOf(Blocks.CRIMSON_STEM) ||
-                state.isOf(Blocks.WARPED_STEM);
+        return state.is(BlockTags.LOGS) ||
+                state.is(Blocks.MUSHROOM_STEM) ||
+                state.is(Blocks.CRIMSON_STEM) ||
+                state.is(Blocks.WARPED_STEM);
     }
 }

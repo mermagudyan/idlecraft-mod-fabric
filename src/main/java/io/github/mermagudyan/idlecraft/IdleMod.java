@@ -1,6 +1,5 @@
 package io.github.mermagudyan.idlecraft;
 
-import io.github.mermagudyan.idlecraft.event.HandDamageHandler;
 import io.github.mermagudyan.idlecraft.command.IdlecraftCommand;
 import io.github.mermagudyan.idlecraft.event.PlayerJoinHandler;
 import io.github.mermagudyan.idlecraft.event.StatTracker;
@@ -13,12 +12,12 @@ import io.github.mermagudyan.idlecraft.event.VillageVisitHandler;
 public class IdleMod implements ModInitializer {
     public static final String MOD_ID = "idlecraft";
     public static final org.slf4j.Logger LOGGER = org.slf4j.LoggerFactory.getLogger("Idlecraft");
+
     @Override
     public void onInitialize() {
         IdlecraftNetworking.register();
         PlayerJoinHandler.register();
         StatTracker.register();
-        HandDamageHandler.register();
         StickToolHandler.register();
         VillageVisitHandler.register();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->

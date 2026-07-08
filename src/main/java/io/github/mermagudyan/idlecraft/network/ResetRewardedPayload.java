@@ -1,16 +1,18 @@
 package io.github.mermagudyan.idlecraft.network;
 
-import net.minecraft.network.RegistryByteBuf;
-import net.minecraft.network.codec.PacketCodec;
-import net.minecraft.network.packet.CustomPayload;
-import net.minecraft.util.Identifier;
+import net.minecraft.network.RegistryFriendlyByteBuf;
+import net.minecraft.network.codec.ByteBufCodecs;
+import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.resources.Identifier;
 
-public record ResetRewardedPayload() implements CustomPayload {
-    public static final Id<ResetRewardedPayload> ID =
-            new Id<>(Identifier.of("idlecraft", "reset_rewarded"));
-    public static final PacketCodec<RegistryByteBuf, ResetRewardedPayload> CODEC =
-            PacketCodec.unit(new ResetRewardedPayload());
+public record ResetRewardedPayload() implements CustomPacketPayload {
+    public static final CustomPacketPayload.Type<ResetRewardedPayload> TYPE =
+            new CustomPacketPayload.Type<>(Identifier.fromNamespaceAndPath("idlecraft", "reset_rewarded"));
+
+    public static final StreamCodec<RegistryFriendlyByteBuf, ResetRewardedPayload> STREAM_CODEC =
+            StreamCodec.unit(new ResetRewardedPayload());
 
     @Override
-    public Id<? extends CustomPayload> getId() { return ID; }
+    public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
 }

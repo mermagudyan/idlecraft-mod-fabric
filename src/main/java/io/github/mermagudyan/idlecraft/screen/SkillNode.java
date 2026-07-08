@@ -1,23 +1,24 @@
 package io.github.mermagudyan.idlecraft.screen;
 
-import net.minecraft.item.Item;
-import net.minecraft.text.Text;
-import net.minecraft.util.Formatting;
+import net.minecraft.world.item.Item;
+import net.minecraft.network.chat.Component;
+import net.minecraft.ChatFormatting;
 import java.util.List;
+
 public class SkillNode {
     public final String id;
     public final float x, y;
     public final int size;
     public final String name;
     public final String description;
-    public final String detailedDescription; // показывается при Ctrl
+    public final String detailedDescription;
     public final int cost;
     public final Item icon;
     public final String parentId;
     public final String unlockCondition;
     public final String conditionText;
     public final SkillNodeCategory category;
-    public final String effectId; // идентификатор эффекта для сервера
+    public final String effectId;
 
     public boolean unlocked = false;
     public final List<SacrificeRequirement> sacrifices;
@@ -56,20 +57,20 @@ public class SkillNode {
         this.hiddenUntilParent = hiddenUntilParent;
     }
 
-    public Text getNameText() {
-        return Text.literal(name).formatted(unlocked ? Formatting.GREEN : Formatting.WHITE);
+    public Component getNameText() {
+        return Component.literal(name).withStyle(unlocked ? ChatFormatting.GREEN : ChatFormatting.WHITE);
     }
 
-    public Text getDescText() {
-        return Text.literal(description).formatted(Formatting.GRAY);
+    public Component getDescText() {
+        return Component.literal(description).withStyle(ChatFormatting.GRAY);
     }
 
-    public Text getCostText() {
-        return Text.literal("Cost: " + cost).formatted(Formatting.GOLD);
+    public Component getCostText() {
+        return Component.literal("Cost: " + cost).withStyle(ChatFormatting.GOLD);
     }
 
-    public Text getCategoryText() {
-        return Text.literal("[" + category.displayName + "]");
+    public Component getCategoryText() {
+        return Component.literal("[" + category.displayName + "]");
     }
 
     public static SkillNode[] defaults() {

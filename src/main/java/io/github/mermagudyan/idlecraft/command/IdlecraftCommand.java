@@ -4,16 +4,16 @@ import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.network.chat.Component;
 
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
+import static net.minecraft.commands.Commands.argument;
+import static net.minecraft.commands.Commands.literal;
 
 public class IdlecraftCommand {
 
-    public static void register(CommandDispatcher<ServerCommandSource> dispatcher) {
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(literal("idlecraft")
                 .then(literal("points")
                         .then(literal("add")
@@ -32,43 +32,43 @@ public class IdlecraftCommand {
         );
     }
 
-    private static int addPoints(ServerCommandSource source, int amount) {
-        ServerPlayerEntity player = source.getPlayer();
+    private static int addPoints(CommandSourceStack source, int amount) {
+        ServerPlayer player = source.getPlayer();
         if (player == null) return 0;
-        var data = PlayerData.getServer(player.getEntityWorld().getServer());
-        data.addPoints(player.getUuid(), amount);
+        PlayerData data = PlayerData.getServer(player.level().getServer());
+        data.addPoints(player.getUUID(), amount);
         IdlecraftNetworking.syncPointsToClient(player);
-        source.sendFeedback(() -> Text.literal("[Idlecraft] +" + amount + " points"), false);
+        source.sendSuccess(() -> Component.literal("[Idlecraft] +" + amount + " points"), false);
         return 1;
     }
 
-    private static int setPoints(ServerCommandSource source, int amount) {
-        ServerPlayerEntity player = source.getPlayer();
+    private static int setPoints(CommandSourceStack source, int amount) {
+        ServerPlayer player = source.getPlayer();
         if (player == null) return 0;
-        var data = PlayerData.getServer(player.getEntityWorld().getServer());
-        data.setPoints(player.getUuid(), amount);
+        PlayerData data = PlayerData.getServer(player.level().getServer());
+        data.setPoints(player.getUUID(), amount);
         IdlecraftNetworking.syncPointsToClient(player);
-        source.sendFeedback(() -> Text.literal("[Idlecraft] Points set to " + amount), false);
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Points set to " + amount), false);
         return 1;
     }
 
-    private static int getPoints(ServerCommandSource source) {
-        ServerPlayerEntity player = source.getPlayer();
+    private static int getPoints(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
         if (player == null) return 0;
-        var data = PlayerData.getServer(player.getEntityWorld().getServer());
-        int pts = data.getPoints(player.getUuid());
-        source.sendFeedback(() -> Text.literal("[Idlecraft] Current points: " + pts), false);
+        PlayerData data = PlayerData.getServer(player.level().getServer());
+        int pts = data.getPoints(player.getUUID());
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Current points: " + pts), false);
         return 1;
     }
 
-    private static int resetPlayer(ServerCommandSource source) {
-        ServerPlayerEntity player = source.getPlayer();
+    private static int resetPlayer(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
         if (player == null) return 0;
-        var data = PlayerData.getServer(player.getEntityWorld().getServer());
-        data.resetAll(player.getUuid());
+        PlayerData data = PlayerData.getServer(player.level().getServer());
+        data.resetAll(player.getUUID());
         IdlecraftNetworking.syncPointsToClient(player);
         IdlecraftNetworking.syncNodesToClient(player);
-        source.sendFeedback(() -> Text.literal("[Idlecraft] Progress reset."), false);
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Progress reset."), false);
         return 1;
     }
 }

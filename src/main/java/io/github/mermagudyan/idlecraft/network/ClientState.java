@@ -9,6 +9,7 @@ public class ClientState {
     private static int points = 0;
     private static List<String> unlockedNodes = new ArrayList<>();
     private static Map<String, Integer> conditionProgress = new HashMap<>();
+    private static Map<String, int[]> sacrificeProgress = new HashMap<>();
 
     public static int getPoints() { return points; }
     public static void setPoints(int p) { points = p; }
@@ -19,7 +20,6 @@ public class ClientState {
     public static void addUnlocked(String nodeId) {
         if (!unlockedNodes.contains(nodeId)) unlockedNodes.add(nodeId);
     }
-    private static Map<String, int[]> sacrificeProgress = new HashMap<>();
 
     public static int[] getSacrificeProgress(String nodeId) {
         return sacrificeProgress.getOrDefault(nodeId, new int[0]);
@@ -28,6 +28,7 @@ public class ClientState {
     public static void setSacrificeProgress(Map<String, int[]> progress) {
         sacrificeProgress = new HashMap<>(progress);
     }
+
     public static int getProgress(String nodeId) { return conditionProgress.getOrDefault(nodeId, 0); }
     public static void setConditionProgress(Map<String, Integer> p) { conditionProgress = new HashMap<>(p); }
 }
