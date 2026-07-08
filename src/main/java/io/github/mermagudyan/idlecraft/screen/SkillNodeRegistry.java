@@ -42,13 +42,13 @@ public class SkillNodeRegistry {
 
         list.add(new SkillNode(
                 "sticky", 0, -400, 60,
-                "Lumberjack I",
-                "Chop wood. +5% axe speed.",
-                "Grants +5% block break speed when using an axe.",
+                "First Tree",
+                "Mine 5 wood to advance the lumberjack branch.",
+                "A node in the lumberjack progression. Has no effect. Requires mining 5 wood.",
                 0, Items.OAK_LOG, "first_steps",
-                null, null,
+                "custom", "Get 5 wood",
                 SkillNodeCategory.SIMPLE,
-                "effect.axe_speed_5"
+                null
         ));
 
         list.add(new SkillNode(
@@ -87,11 +87,11 @@ public class SkillNodeRegistry {
         ));
 
         list.add(new SkillNode(
-                "axe_node", 300, -600, 60,
+                "axe_node", -300, -1200, 60,
                 "Axe Master",
                 "Sacrifice 16 wood + 2 apples.",
                 "Craft a wooden axe, mine 16 wood with it, then sacrifice 16 wood and 2 apples to unlock stone.",
-                0, Items.WOODEN_AXE, "sticky",
+                0, Items.WOODEN_AXE, "wooden_tools",
                 null, null,
                 SkillNodeCategory.SIMPLE,
                 "trigger.axe",
@@ -102,25 +102,25 @@ public class SkillNodeRegistry {
         ));
 
         list.add(new SkillNode(
-                "stone_1", 300, -800, 60,
+                "stone_1", 300, 200, 60,
                 "Miner I",
-                "Mine stone. +5% pickaxe speed.",
-                "Grants +5% block break speed when using a pickaxe.",
-                5, Items.COBBLESTONE, "axe_node",
+                "Mine stone to advance the mining branch.",
+                "A node in the mining progression. Has no effect.",
+                5, Items.COBBLESTONE, "start",
                 "custom", "Unlock axe branch",
                 SkillNodeCategory.SIMPLE,
-                "effect.pickaxe_speed_5"
+                null
         ));
 
         list.add(new SkillNode(
-                "tech_1", 0, -700, 60,
+                "tech_1", 700, -400, 60,
                 "Efficiency I",
-                "+10% movement speed.",
-                "Sacrifice 3 bread to unlock movement speed boost.",
+                "A technology branch node.",
+                "Sacrifice 3 bread to advance the technology branch. Has no effect.",
                 0, Items.BREAD, "sticky",
                 "custom", "Earn 'A Seedy Place'",
                 SkillNodeCategory.SIMPLE,
-                "effect.move_speed_10",
+                null,
                 List.of(new SacrificeRequirement(Items.BREAD, 3)), false
         ));
 
@@ -131,38 +131,38 @@ public class SkillNodeRegistry {
         List<SkillNode> list = new ArrayList<>();
 
         list.add(new SkillNode(
-                "stone_2", 150, -1000, 60,
+                "stone_2", 150, 400, 60,
                 "Miner II",
-                "+10% ore drop. Auto-smelt 20% of ores.",
-                "10% chance for extra ore drop. 20% of mined ores are auto-smelted.",
-                25, Items.IRON_ORE, "stone_1",
+                "A deeper mining branch node. Has no effect.",
+                "Second mining progression node. Has no effect.",
+                 25, Items.IRON_ORE, "stone_1",
                 null, null,
                 SkillNodeCategory.MEDIUM,
-                "effect.ore_drop_10",
+                null,
                 List.of(), true
         ));
 
         list.add(new SkillNode(
-                "stone_3", 450, -1000, 60,
+                "stone_3", 450, 400, 60,
                 "Prospector",
-                "Reveal ores in 32-block radius.",
-                "Highlights ores within 32 blocks.",
+                "A deeper mining branch node. Has no effect.",
+                "Third mining progression node. Has no effect.",
                 100, Items.DIAMOND_PICKAXE, "stone_1",
                 null, null,
                 SkillNodeCategory.MEDIUM,
-                "effect.ore_reveal",
+                null,
                 List.of(), true
         ));
 
         list.add(new SkillNode(
-                "tech_2", -150, -850, 60,
+                "tech_2", 600, -600, 60,
                 "Efficiency II",
-                "+20% attack speed. +1 max health.",
-                "Applies attack speed boost and increases max health by 1.",
+                "A deeper technology branch node. Has no effect.",
+                "Second technology progression node. Has no effect.",
                 40, Items.REPEATER, "tech_1",
                 null, null,
                 SkillNodeCategory.MEDIUM,
-                "effect.attack_speed_20",
+                null,
                 List.of(), true
         ));
 
@@ -173,14 +173,14 @@ public class SkillNodeRegistry {
         List<SkillNode> list = new ArrayList<>();
 
         list.add(new SkillNode(
-                "tech_3", -150, -1050, 60,
+                "tech_3", 800, -600, 60,
                 "Overclock",
-                "+15% global action speed.",
-                "Increases ALL action speeds by 15%.",
-                200, Items.REDSTONE_BLOCK, "tech_2",
+                "A deeper technology branch node. Has no effect.",
+                "Third technology progression node. Has no effect.",
+                200, Items.REDSTONE_BLOCK, "tech_1",
                 null, null,
                 SkillNodeCategory.COMPLEX,
-                "effect.global_speed_15",
+                null,
                 List.of(), true
         ));
 

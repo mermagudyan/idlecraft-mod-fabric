@@ -23,12 +23,14 @@ public class PlayerData extends SavedData {
     private final Set<UUID> visitedVillage = new HashSet<>();
     private final Map<UUID, Set<String>> rewardedAdvancements = new HashMap<>();
     private final Map<UUID, Map<String, List<Integer>>> sacrificeProgress = new HashMap<>();
+    private final Map<UUID, Boolean> debug = new HashMap<>();
 
     public PlayerData() {}
 
     public PlayerData(Map<String, Integer> pts, Map<String, List<String>> nodes,
                       Map<String, List<String>> rewarded, Map<String, Map<String, Integer>> statBases,
-                      Set<String> visited, Map<String, Map<String, List<Integer>>> sacrificeProgress) {
+                      Set<String> visited, Map<String, Map<String, List<Integer>>> sacrificeProgress,
+                      Map<String, Boolean> debug) {
         pts.forEach((k, v) -> this.points.put(UUID.fromString(k), v));
         nodes.forEach((k, v) -> this.unlockedNodes.put(UUID.fromString(k), v));
         rewarded.forEach((k, v) -> {
@@ -42,6 +44,7 @@ public class PlayerData extends SavedData {
             v.forEach((nk, nv) -> inner.put(nk, new ArrayList<>(nv)));
             this.sacrificeProgress.put(UUID.fromString(k), inner);
         });
+        debug.forEach((k, v) -> this.debug.put(UUID.fromString(k), v));
     }
 
     public static final Codec<PlayerData> CODEC = RecordCodecBuilder.create(instance ->
@@ -66,7 +69,10 @@ public class PlayerData extends SavedData {
                             .forGetter(d -> toStringSet(d.visitedVillage)),
                     Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.list(Codec.INT)))
                             .optionalFieldOf("sacrificeProgress", Map.of())
-                            .forGetter(d -> toStringMapSacrifice(d.sacrificeProgress))
+                            .forGetter(d -> toStringMapSacrifice(d.sacrificeProgress)),
+                    Codec.unboundedMap(Codec.STRING, Codec.BOOL)
+                            .optionalFieldOf("debug", Map.of())
+                            .forGetter(d -> toStringMapBool(d.debug))
             ).apply(instance, PlayerData::new)
     );
 
@@ -128,6 +134,12 @@ public class PlayerData extends SavedData {
 
     private static Map<String, List<String>> toStringMapNodes(Map<UUID, List<String>> in) {
         Map<String, List<String>> out = new HashMap<>();
+        in.forEach((k, v) -> out.put(k.toString(), v));
+        return out;
+    }
+
+    private static Map<String, Boolean> toStringMapBool(Map<UUID, Boolean> in) {
+        Map<String, Boolean> out = new HashMap<>();
         in.forEach((k, v) -> out.put(k.toString(), v));
         return out;
     }
@@ -220,6 +232,15 @@ public class PlayerData extends SavedData {
 
     public void clearStatBases(UUID id) {
         statBases.remove(id);
+        setDirty();
+    }
+
+    public boolean isDebug(UUID id) {
+        return debug.getOrDefault(id, false);
+    }
+
+    public void setDebug(UUID id, boolean value) {
+        debug.put(id, value);
         setDirty();
     }
 }

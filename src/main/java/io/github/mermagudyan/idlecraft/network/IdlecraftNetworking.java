@@ -26,6 +26,7 @@ public class IdlecraftNetworking {
         PayloadTypeRegistry.serverboundPlay().register(ResetRewardedPayload.TYPE, ResetRewardedPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(SacrificeOfferPayload.TYPE, SacrificeOfferPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SacrificeStatePayload.TYPE, SacrificeStatePayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(DebugStatePayload.TYPE, DebugStatePayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(SacrificeOfferPayload.TYPE,
                 (payload, ctx) -> {
@@ -229,5 +230,12 @@ public class IdlecraftNetworking {
 
     public static void syncConditionProgress(ServerPlayer player, Map<String, Integer> progress) {
         ServerPlayNetworking.send(player, new ConditionProgressPayload(progress));
+    }
+
+    public static void syncDebugToClient(ServerPlayer player) {
+        MinecraftServer server = player.level().getServer();
+        if (server == null) return;
+        boolean d = PlayerData.getServer(server).isDebug(player.getUUID());
+        ServerPlayNetworking.send(player, new DebugStatePayload(d));
     }
 }

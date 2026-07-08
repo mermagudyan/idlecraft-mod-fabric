@@ -1,6 +1,7 @@
 package io.github.mermagudyan.idlecraft.client.mixin;
 
 import io.github.mermagudyan.idlecraft.event.CraftingLockHandler;
+import net.minecraft.client.Minecraft;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.inventory.CraftingMenu;
@@ -23,6 +24,19 @@ public abstract class CraftingResultSlotMixin {
             if (CraftingLockHandler.isCraftingLocked(player, gridSize, result)) {
                 cir.setReturnValue(false);
             }
+        }
+    }
+
+    @Inject(method = "getItem", at = @At("HEAD"), cancellable = true)
+    private void idlecraft$hideLockedResult(CallbackInfoReturnable<ItemStack> cir) {
+        Slot self = (Slot) (Object) this;
+        if (!(self instanceof ResultSlot)) return;
+        Minecraft mc = Minecraft.getInstance();
+        Player player = mc.player;
+        if (player == null) return;
+        int gridSize = player.containerMenu instanceof CraftingMenu ? 9 : 4;
+        if (CraftingLockHandler.isResultSlotLocked(player, gridSize)) {
+            cir.setReturnValue(ItemStack.EMPTY);
         }
     }
 }

@@ -36,6 +36,7 @@ public class PlayerJoinHandler {
                         IdlecraftNetworking.syncPointsToClient(player);
                         IdlecraftNetworking.syncNodesToClient(player);
                         IdlecraftNetworking.syncSacrificeState(player);
+                        IdlecraftNetworking.syncDebugToClient(player);
                     }
                     it.remove();
                 } else {

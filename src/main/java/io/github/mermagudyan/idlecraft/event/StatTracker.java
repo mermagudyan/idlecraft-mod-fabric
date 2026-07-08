@@ -49,6 +49,7 @@ public class StatTracker {
         int currentWood = getWoodMined(player);
         int deltaWood = Math.max(0, currentWood - baseWood);
         progress.put("wood_mined", Math.min(deltaWood, 15));
+        progress.put("sticky", Math.min(deltaWood, 5));
 
         if (!data.hasStatBase(player.getUUID(), "wood_mined_axe")) {
             data.setStatBase(player.getUUID(), "wood_mined_axe", getWoodMinedWithAxe(player));

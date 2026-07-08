@@ -18,7 +18,6 @@ import java.util.List;
 import java.util.HashMap;
 import java.util.Map;
 import io.github.mermagudyan.idlecraft.network.SacrificeOfferPayload;
-import net.minecraft.world.item.Items;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -155,6 +154,9 @@ public class IdlecraftScreen extends Screen {
 
         if ("first_steps".equals(n.id)) {
             return ClientState.getProgress("first_steps") >= 5;
+        }
+        if ("sticky".equals(n.id)) {
+            return ClientState.getProgress("sticky") >= 5;
         }
         if ("village_visit".equals(n.id)) {
             return ClientState.getProgress("crafting_table_unlock") >= 1;
@@ -481,11 +483,22 @@ public class IdlecraftScreen extends Screen {
 
     private boolean isNodeVisible(SkillNode n) {
         if (n.id.equals("start")) return true;
+
+        if (n.id.equals("axe_node")) {
+            SkillNode a = nodes.get("crafting_table_unlock");
+            SkillNode b = nodes.get("wooden_tools");
+            return a != null && a.unlocked && b != null && b.unlocked;
+        }
+
+        if (n.id.equals("stone_1")) {
+            SkillNode axe = nodes.get("axe_node");
+            return axe != null && isNodeVisible(axe);
+        }
+
         if (n.parentId == null) return false;
 
         SkillNode parent = nodes.get(n.parentId);
         if (parent == null || !parent.unlocked) {
-            if (n.hiddenUntilParent) return false;
             return false;
         }
         return true;
@@ -572,13 +585,13 @@ public class IdlecraftScreen extends Screen {
         guiGraphics.pose().translate(cx - iconSize / 2, cy - iconSize / 2);
         guiGraphics.pose().scale(scale, scale);
 
-        Item iconToDraw = masked ? Items.BARRIER : n.icon;
+        Item iconToDraw = n.icon;
         guiGraphics.item(new ItemStack(iconToDraw), 0, 0);
         guiGraphics.pose().popMatrix();
 
         if (zoom > 0.4f) {
             int labelY = y2 + 4;
-            String name = masked ? "???" : n.name;
+            String name = n.name;
             guiGraphics.text(this.font,
                     Component.literal(name).withStyle(n.unlocked ? ChatFormatting.GREEN : ChatFormatting.WHITE),
                     cx - this.font.width(name) / 2, labelY,
@@ -616,18 +629,20 @@ public class IdlecraftScreen extends Screen {
         int pad = 6;
         int lineH = 11;
 
-        boolean masked = !n.unlocked && !isConditionMet(n);
-
-        String nameStr = masked ? "???" : n.name;
-        String descStr = masked ? "???" : n.description;
-        String costStr = masked ? "Cost: ???" : "Cost: " + n.cost;
+        String nameStr = n.name;
+        String descStr = n.description;
+        String costStr = "Cost: " + n.cost;
         String pointsStr = "Your points: " + ClientState.getPoints();
 
         String condStr = null;
         boolean conditionMet = false;
-        if (!n.unlocked && n.conditionText != null && !n.conditionText.isEmpty() && !masked) {
+        if (!n.unlocked && n.conditionText != null && !n.conditionText.isEmpty()) {
             if ("first_steps".equals(n.id)) {
                 int progress = ClientState.getProgress("first_steps");
+                condStr = "Condition: " + n.conditionText + " (" + progress + "/5)";
+                conditionMet = (progress >= 5);
+            } else if ("sticky".equals(n.id)) {
+                int progress = ClientState.getProgress("sticky");
                 condStr = "Condition: " + n.conditionText + " (" + progress + "/5)";
                 conditionMet = (progress >= 5);
             } else if ("village_visit".equals(n.id)) {
@@ -657,13 +672,13 @@ public class IdlecraftScreen extends Screen {
         String unlocksStr = null;
         int extraLines = 0;
         if (expandProgress > 0.01f) {
-            grantsStr = masked ? "???" : n.detailedDescription;
+            grantsStr = n.detailedDescription;
             extraLines++;
             StringBuilder children = new StringBuilder();
             for (SkillNode child : nodes.values()) {
                 if (n.id.equals(child.parentId)) {
                     if (children.length() > 0) children.append(", ");
-                    children.append(masked ? "???" : child.name);
+                    children.append(child.name);
                 }
             }
             if (children.length() > 0) {

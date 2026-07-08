@@ -7,6 +7,7 @@ import io.github.mermagudyan.idlecraft.network.PointsSyncPayload;
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import io.github.mermagudyan.idlecraft.network.SacrificeStatePayload;
+import io.github.mermagudyan.idlecraft.network.DebugStatePayload;
 
 public class ClientNetworkInit implements ClientModInitializer {
     @Override
@@ -22,6 +23,10 @@ public class ClientNetworkInit implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(SacrificeStatePayload.TYPE,
                 (payload, ctx) -> ctx.client().execute(() -> ClientState.setSacrificeProgress(payload.progress()))
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(DebugStatePayload.TYPE,
+                (payload, ctx) -> ctx.client().execute(() -> ClientState.setDebug(payload.debug()))
         );
     }
 }

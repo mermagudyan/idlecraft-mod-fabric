@@ -10,9 +10,13 @@ public class ClientState {
     private static List<String> unlockedNodes = new ArrayList<>();
     private static Map<String, Integer> conditionProgress = new HashMap<>();
     private static Map<String, int[]> sacrificeProgress = new HashMap<>();
+    private static boolean debug = false;
 
     public static int getPoints() { return points; }
     public static void setPoints(int p) { points = p; }
+
+    public static boolean isDebug() { return debug; }
+    public static void setDebug(boolean d) { debug = d; }
 
     public static List<String> getUnlockedNodes() { return new ArrayList<>(unlockedNodes); }
     public static void setUnlockedNodes(List<String> nodes) { unlockedNodes = new ArrayList<>(nodes); }

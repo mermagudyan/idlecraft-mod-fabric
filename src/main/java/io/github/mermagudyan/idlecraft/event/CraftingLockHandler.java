@@ -44,6 +44,29 @@ public class CraftingLockHandler {
         return false;
     }
 
+    public static boolean isResultSlotLocked(Player player, int gridSize) {
+        if (gridSize == INVENTORY_GRID) {
+            return true;
+        }
+
+        if (gridSize == TABLE_GRID) {
+            boolean isClient = player.level().isClientSide();
+            List<String> unlocked;
+
+            if (isClient) {
+                unlocked = ClientState.getUnlockedNodes();
+            } else {
+                MinecraftServer server = player.level().getServer();
+                if (server == null) return false;
+                unlocked = PlayerData.getServer(server).getUnlockedNodes(player.getUUID());
+            }
+
+            return !unlocked.contains("crafting_table_unlock");
+        }
+
+        return false;
+    }
+
     private static void sendMessage(Player player, boolean isClient) {
         if (isClient) return;
         player.sendSystemMessage(
