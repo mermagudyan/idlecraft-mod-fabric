@@ -32,6 +32,8 @@ public class IdlecraftNetworking {
         PayloadTypeRegistry.clientboundPlay().register(SacrificeStatePayload.TYPE, SacrificeStatePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(DebugStatePayload.TYPE, DebugStatePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(ClearConfirmPayload.TYPE, ClearConfirmPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(StructureBlockedPayload.TYPE, StructureBlockedPayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(StructureRegionPayload.TYPE, StructureRegionPayload.STREAM_CODEC);
         PayloadTypeRegistry.serverboundPlay().register(ClearNodesPayload.TYPE, ClearNodesPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(SacrificeOfferPayload.TYPE,
@@ -384,6 +386,7 @@ public class IdlecraftNetworking {
         if (server == null) return;
         List<String> nodes = PlayerData.getServer(server).getUnlockedNodes(player.getUUID());
         io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = nodes.contains("burning_knowledge");
+        io.github.mermagudyan.idlecraft.common.FurnaceState.enhancedSmelting = nodes.contains("enhanced_smelting");
         ServerPlayNetworking.send(player, new NodesSyncPayload(nodes));
     }
 

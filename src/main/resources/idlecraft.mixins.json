@@ -4,6 +4,7 @@
   "package": "io.github.mermagudyan.idlecraft.mixin",
   "compatibilityLevel": "JAVA_25",
     "mixins": [
+    "PlayerChunkSenderMixin",
     "PlayerAdvancementTrackerMixin",
     "PlayerEntityBreakSpeedMixin",
     "InteractionManagerAccessor",
@@ -11,7 +12,10 @@
     "SeedDropMixin",
     "ItemStackDurabilityMixin",
     "FurnaceBurnMixin",
-    "FurnaceFuelSlotMixin"
+    "FurnaceFuelSlotMixin",
+    "BlockBreakStructureMixin",
+    "ServerPlayerGameModeMixin",
+    "ServerPlayerPlaceMixin"
   ],
   "client": [],
   "injectors": {
