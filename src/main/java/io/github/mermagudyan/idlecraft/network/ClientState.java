@@ -34,5 +34,5 @@ public class ClientState {
     }
 
     public static int getProgress(String nodeId) { return conditionProgress.getOrDefault(nodeId, 0); }
-    public static void setConditionProgress(Map<String, Integer> p) { conditionProgress = new HashMap<>(p); }
+    public static void setConditionProgress(Map<String, Integer> p) { conditionProgress.putAll(p); }
 }

@@ -8,7 +8,10 @@
     "PlayerEntityBreakSpeedMixin",
     "InteractionManagerAccessor",
     "CraftingResultSlotMixin",
-    "SeedDropMixin"
+    "SeedDropMixin",
+    "ItemStackDurabilityMixin",
+    "FurnaceBurnMixin",
+    "FurnaceFuelSlotMixin"
   ],
   "client": [],
   "injectors": {

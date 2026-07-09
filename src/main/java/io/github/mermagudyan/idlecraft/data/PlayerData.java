@@ -24,13 +24,16 @@ public class PlayerData extends SavedData {
     private final Map<UUID, Set<String>> rewardedAdvancements = new HashMap<>();
     private final Map<UUID, Map<String, List<Integer>>> sacrificeProgress = new HashMap<>();
     private final Map<UUID, Boolean> debug = new HashMap<>();
+    private final Map<UUID, Long> branchLockUntil = new HashMap<>();
+    private final Map<UUID, Map<String, Integer>> furnaceCounters = new HashMap<>();
 
     public PlayerData() {}
 
     public PlayerData(Map<String, Integer> pts, Map<String, List<String>> nodes,
                       Map<String, List<String>> rewarded, Map<String, Map<String, Integer>> statBases,
                       Set<String> visited, Map<String, Map<String, List<Integer>>> sacrificeProgress,
-                      Map<String, Boolean> debug) {
+                      Map<String, Boolean> debug, Map<String, Long> branchLockUntil,
+                      Map<String, Map<String, Integer>> furnaceCounters) {
         pts.forEach((k, v) -> this.points.put(UUID.fromString(k), v));
         nodes.forEach((k, v) -> this.unlockedNodes.put(UUID.fromString(k), v));
         rewarded.forEach((k, v) -> {
@@ -45,6 +48,8 @@ public class PlayerData extends SavedData {
             this.sacrificeProgress.put(UUID.fromString(k), inner);
         });
         debug.forEach((k, v) -> this.debug.put(UUID.fromString(k), v));
+        branchLockUntil.forEach((k, v) -> this.branchLockUntil.put(UUID.fromString(k), v));
+        furnaceCounters.forEach((k, v) -> this.furnaceCounters.put(UUID.fromString(k), new HashMap<>(v)));
     }
 
     public static final Codec<PlayerData> CODEC = RecordCodecBuilder.create(instance ->
@@ -70,9 +75,15 @@ public class PlayerData extends SavedData {
                     Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.list(Codec.INT)))
                             .optionalFieldOf("sacrificeProgress", Map.of())
                             .forGetter(d -> toStringMapSacrifice(d.sacrificeProgress)),
-                    Codec.unboundedMap(Codec.STRING, Codec.BOOL)
+                     Codec.unboundedMap(Codec.STRING, Codec.BOOL)
                             .optionalFieldOf("debug", Map.of())
-                            .forGetter(d -> toStringMapBool(d.debug))
+                            .forGetter(d -> toStringMapBool(d.debug)),
+                    Codec.unboundedMap(Codec.STRING, Codec.LONG)
+                            .optionalFieldOf("branchLockUntil", Map.of())
+                            .forGetter(d -> toStringMapLong(d.branchLockUntil)),
+                    Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.INT))
+                            .optionalFieldOf("furnaceCounters", Map.of())
+                            .forGetter(d -> toStringMap2(d.furnaceCounters))
             ).apply(instance, PlayerData::new)
     );
 
@@ -142,6 +153,21 @@ public class PlayerData extends SavedData {
         Map<String, Boolean> out = new HashMap<>();
         in.forEach((k, v) -> out.put(k.toString(), v));
         return out;
+    }
+
+    private static Map<String, Long> toStringMapLong(Map<UUID, Long> in) {
+        Map<String, Long> out = new HashMap<>();
+        in.forEach((k, v) -> out.put(k.toString(), v));
+        return out;
+    }
+
+    public long getBranchLockUntil(UUID id) {
+        return branchLockUntil.getOrDefault(id, 0L);
+    }
+
+    public void setBranchLockUntil(UUID id, long until) {
+        branchLockUntil.put(id, until);
+        setDirty();
     }
 
     public static PlayerData getServer(MinecraftServer server) {
@@ -214,6 +240,8 @@ public class PlayerData extends SavedData {
         statBases.remove(id);
         visitedVillage.remove(id);
         sacrificeProgress.remove(id);
+        furnaceCounters.remove(id);
+        branchLockUntil.remove(id);
         setDirty();
     }
 
@@ -241,6 +269,20 @@ public class PlayerData extends SavedData {
 
     public void setDebug(UUID id, boolean value) {
         debug.put(id, value);
+        setDirty();
+    }
+
+    public int getFurnaceCounter(UUID id, String key) {
+        return furnaceCounters.getOrDefault(id, new HashMap<>()).getOrDefault(key, 0);
+    }
+
+    public void setFurnaceCounter(UUID id, String key, int value) {
+        furnaceCounters.computeIfAbsent(id, k -> new HashMap<>()).put(key, value);
+        setDirty();
+    }
+
+    public void clearFurnaceCounters(UUID id) {
+        furnaceCounters.remove(id);
         setDirty();
     }
 }

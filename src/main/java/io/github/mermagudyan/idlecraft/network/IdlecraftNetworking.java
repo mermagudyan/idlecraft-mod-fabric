@@ -11,6 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
 import io.github.mermagudyan.idlecraft.event.StatTracker;
+import io.github.mermagudyan.idlecraft.event.FurnaceUsageTracker;
 import java.util.Map;
 import java.util.List;
 import io.github.mermagudyan.idlecraft.screen.SkillNode;
@@ -97,6 +98,26 @@ public class IdlecraftNetworking {
                             return;
                         }
 
+                        SkillNode node = null;
+                        for (SkillNode n : SkillNodeRegistry.getAll()) {
+                            if (n.id.equals(nodeId)) { node = n; break; }
+                        }
+                        if (node == null) return;
+
+                        if (!node.sacrifices.isEmpty()) {
+                            List<Integer> sac = data.getSacrificeProgress(player.getUUID(), nodeId);
+                            boolean allSac = true;
+                            for (int i = 0; i < node.sacrifices.size(); i++) {
+                                SacrificeRequirement r = node.sacrifices.get(i);
+                                int c = i < sac.size() ? sac.get(i) : 0;
+                                if (c < r.amount()) { allSac = false; break; }
+                            }
+                            if (!allSac) {
+                                player.sendSystemMessage(Component.literal("[Idlecraft] Sacrifice not completed for: " + node.name));
+                                return;
+                            }
+                        }
+
                         int cost = getCost(nodeId);
                         int currentPoints = data.getPoints(player.getUUID());
                         if (currentPoints < cost) {
@@ -150,6 +171,46 @@ public class IdlecraftNetworking {
                             }
                         }
 
+                        if ("cobblestone".equals(nodeId)) {
+                            int progress = StatTracker.getCobblestoneMined(player) - data.getStatBase(player.getUUID(), "cobblestone_mined");
+                            if (progress < 18) {
+                                player.sendSystemMessage(Component.literal("[Idlecraft] Condition not met: Mine 18 stone."));
+                                return;
+                            }
+                        }
+
+                        if ("stonecutter".equals(nodeId)) {
+                            int progress = StatTracker.getPlanksCrafted(player) - data.getStatBase(player.getUUID(), "planks_crafted");
+                            if (progress < 8) {
+                                player.sendSystemMessage(Component.literal("[Idlecraft] Condition not met: Craft 8 planks from stonecutter."));
+                                return;
+                            }
+                        }
+
+                        if ("coal_knowledge".equals(nodeId)) {
+                            if (data.getFurnaceCounter(player.getUUID(), FurnaceUsageTracker.FURNACE_OPENED) < 1
+                                    || data.getFurnaceCounter(player.getUUID(), FurnaceUsageTracker.FOOD_COOKED) < 1) {
+                                player.sendSystemMessage(Component.literal("[Idlecraft] Condition not met: Enter a furnace and cook any food."));
+                                return;
+                            }
+                        }
+
+                        if ("burning_knowledge".equals(nodeId)) {
+                            if (data.getFurnaceCounter(player.getUUID(), FurnaceUsageTracker.FURNACE_TAKES) < 5) {
+                                player.sendSystemMessage(Component.literal("[Idlecraft] Condition not met: Take items from furnace output 5 times."));
+                                return;
+                            }
+                        }
+
+                        if ("stone_tools".equals(nodeId) || "durability".equals(nodeId)) {
+                            long lockUntil = data.getBranchLockUntil(player.getUUID());
+                            if (lockUntil > System.currentTimeMillis()) {
+                                long secs = (lockUntil - System.currentTimeMillis()) / 1000;
+                                player.sendSystemMessage(Component.literal("[Idlecraft] Branch locked for " + secs + "s (other stone branch chosen)."));
+                                return;
+                            }
+                        }
+
                         if ("tech_1".equals(nodeId)) {
                             var adv = server.getAdvancements().get(Identifier.fromNamespaceAndPath("minecraft", "husbandry/plant_seed"));
                             if (adv == null || !player.getAdvancements().getOrStartProgress(adv).isDone()) {
@@ -166,6 +227,14 @@ public class IdlecraftNetworking {
                         data.setPoints(player.getUUID(), currentPoints - cost);
                         data.unlockNode(player.getUUID(), nodeId);
 
+                        if ("burning_knowledge".equals(nodeId)) {
+                            io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = true;
+                        }
+
+                        if ("stone_tools".equals(nodeId) || "durability".equals(nodeId)) {
+                            data.setBranchLockUntil(player.getUUID(), System.currentTimeMillis() + 5L * 60L * 1000L);
+                        }
+
                         syncPointsToClient(player);
                         syncNodesToClient(player);
 
@@ -177,21 +246,33 @@ public class IdlecraftNetworking {
 
     private static void handleSacrifice(ServerPlayer player, MinecraftServer server, String nodeId) {
         PlayerData data = PlayerData.getServer(server);
-        if (data.getUnlockedNodes(player.getUUID()).contains(nodeId)) return;
+        System.out.println("[IDLECRAFT] handleSacrifice: " + nodeId + " by " + player.getName().getString());
+        if (data.getUnlockedNodes(player.getUUID()).contains(nodeId)) {
+            System.out.println("[IDLECRAFT] handleSacrifice: already unlocked, skip");
+            return;
+        }
 
         SkillNode node = null;
         for (SkillNode n : SkillNodeRegistry.getAll()) {
             if (n.id.equals(nodeId)) { node = n; break; }
         }
-        if (node == null || node.sacrifices.isEmpty()) return;
+        if (node == null || node.sacrifices.isEmpty()) {
+            System.out.println("[IDLECRAFT] handleSacrifice: node null or no sacrifices");
+            return;
+        }
 
-        if (node.parentId != null && !data.getUnlockedNodes(player.getUUID()).contains(node.parentId)) return;
+        if (node.parentId != null && !data.getUnlockedNodes(player.getUUID()).contains(node.parentId)) {
+            System.out.println("[IDLECRAFT] handleSacrifice: parent not unlocked: " + node.parentId);
+            return;
+        }
 
         for (SacrificeRequirement req : node.sacrifices) {
             List<Integer> prog = data.getSacrificeProgress(player.getUUID(), nodeId);
             int idx = node.sacrifices.indexOf(req);
             int current = idx < prog.size() ? prog.get(idx) : 0;
-            if (current < req.amount() && hasRequiredItem(player, req)) {
+            boolean has = hasRequiredItem(player, req);
+            System.out.println("[IDLECRAFT] handleSacrifice: req=" + req.item() + " cur=" + current + "/" + req.amount() + " has=" + has);
+            if (current < req.amount() && has) {
                 infuseItem(player, server, node, req);
                 break;
             }
@@ -251,8 +332,7 @@ public class IdlecraftNetworking {
             if (c < r.amount()) { allMet = false; break; }
         }
         if (allMet) {
-            data.unlockNode(player.getUUID(), nodeId);
-            data.clearSacrificeProgress(player.getUUID(), nodeId);
+            if ("burning_knowledge".equals(nodeId)) io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = true;
             syncPointsToClient(player);
             syncNodesToClient(player);
             syncSacrificeState(player);
@@ -303,6 +383,7 @@ public class IdlecraftNetworking {
         MinecraftServer server = player.level().getServer();
         if (server == null) return;
         List<String> nodes = PlayerData.getServer(server).getUnlockedNodes(player.getUUID());
+        io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = nodes.contains("burning_knowledge");
         ServerPlayNetworking.send(player, new NodesSyncPayload(nodes));
     }
 

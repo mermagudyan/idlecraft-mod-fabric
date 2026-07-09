@@ -8,6 +8,7 @@ import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import io.github.mermagudyan.idlecraft.event.StickToolHandler;
 import io.github.mermagudyan.idlecraft.event.VillageVisitHandler;
+import io.github.mermagudyan.idlecraft.event.FurnaceUsageTracker;
 
 public class IdleMod implements ModInitializer {
     public static final String MOD_ID = "idlecraft";
@@ -20,6 +21,7 @@ public class IdleMod implements ModInitializer {
         StatTracker.register();
         StickToolHandler.register();
         VillageVisitHandler.register();
+        FurnaceUsageTracker.register();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 IdlecraftCommand.register(dispatcher));
         LOGGER.info("Initialized.");

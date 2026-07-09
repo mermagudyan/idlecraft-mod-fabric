@@ -13,6 +13,7 @@ public class SkillNodeRegistry {
     public static final String BRANCH_TUTORIAL = "Tutorial";
     public static final String BRANCH_MINING = "Mining";
     public static final String BRANCH_TECH = "Tech";
+    public static final String BRANCH_STONE = "Stone Knowledge";
 
     public static SkillNode[] getAll() {
         List<SkillNode> all = new ArrayList<>();
@@ -133,11 +134,11 @@ public class SkillNodeRegistry {
                 "Craft planks on a stonecutter.",
                 "After visiting a village, craft any planks using a stonecutter to unlock this node.",
                 0, Items.STONECUTTER, "village_visit",
-                null, null,
+                "custom", "Craft 8 planks from stonecutter",
                 SkillNodeCategory.SIMPLE,
                 null,
                 List.of(), true,
-                BRANCH_TUTORIAL
+                BRANCH_STONE
         ));
 
         list.add(new SkillNode(
@@ -145,7 +146,7 @@ public class SkillNodeRegistry {
                 "Miner I",
                 "Mine stone to advance the mining branch.",
                 "A node in the mining progression. Has no effect.",
-                5, Items.COBBLESTONE, "start",
+                0, Items.COBBLESTONE, "start",
                 "custom", "Unlock axe branch",
                 SkillNodeCategory.SIMPLE,
                 null,
@@ -153,11 +154,112 @@ public class SkillNodeRegistry {
         ));
 
         list.add(new SkillNode(
+                "cobblestone", 150, 420, 60,
+                "Cobblestone",
+                "Mine 18 stone to unlock cobblestone gathering.",
+                "Allows breaking cobblestone with any tool. Unlocks further stone crafting.",
+                0, Items.COBBLESTONE, "stone_1",
+                 "custom", "Mine 18 stone",
+                SkillNodeCategory.SIMPLE,
+                null,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "furnace", 450, 420, 60,
+                "Furnace",
+                "Sacrifice 9 cobblestone to unlock furnace crafting.",
+                "Unlocks crafting a furnace. Opens the smelting branch.",
+                0, Items.FURNACE, "stone_1",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(new SacrificeRequirement(Items.COBBLESTONE, 9)), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "stone_tools", 0, 640, 60,
+                "Stone Tools",
+                "Sacrifice 4 planks and 9 stone to unlock stone tool crafting.",
+                "Unlocks crafting all stone tools. Starts a 5-minute lock on the durability branch.",
+                0, Items.STONE_PICKAXE, "cobblestone",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.OAK_PLANKS, 4),
+                        new SacrificeRequirement(Items.COBBLESTONE, 9)
+                ), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "durability", 150, 640, 60,
+                "Improved Durability",
+                "Sacrifice 8 planks and 4 string to improve tool durability.",
+                "Tool durability becomes half of the original (2x less than base). Starts a 5-minute lock on the stone tools branch.",
+                0, Items.STRING, "cobblestone",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.OAK_PLANKS, 8),
+                        new SacrificeRequirement(Items.STRING, 4)
+                ), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "burning_knowledge", 350, 640, 60,
+                "Burning Knowledge",
+                "Use a furnace 5 times and take an item from its output each time.",
+                "Smelting fuel depletes 4x slower; planks become valid furnace fuel alongside sticks.",
+                0, Items.COAL, "furnace",
+                "custom", "Take items from furnace output 5 times",
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "coal_knowledge", 550, 640, 60,
+                "Coal Knowledge",
+                "Enter a furnace and cook any food.",
+                "Allows mining coal, but it cannot be used in furnaces or crafting yet.",
+                0, Items.COAL, "furnace",
+                "custom", "Enter a furnace and cook any food",
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "enhanced_smelting", 650, 420, 60,
+                "Enhanced Smelting",
+                "Sacrifice 1 sapling, 1 seed, 1 plank and 1 stick to improve smelting.",
+                "After upgrade, furnace fuel accepts sticks (if First Steps is unlocked), planks, and all wooden/plant items with operation count <= 1 (tools, signs, doors, slabs, bowls, saplings, dead bush, wool, carpets, bamboo, scaffolding).",
+                0, Items.BLAST_FURNACE, "furnace",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.OAK_SAPLING, 1),
+                        new SacrificeRequirement(Items.WHEAT_SEEDS, 1),
+                        new SacrificeRequirement(Items.OAK_PLANKS, 1),
+                        new SacrificeRequirement(Items.STICK, 1)
+                ), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
                 "bread_sac", 700, -400, 60,
                 "Bread Sacrifice",
                 "Sacrifice 3 bread to advance the technology branch.",
                 "Earns 'A Seedy Place' to open the tech branch, then sacrifice 3 bread. Has no effect.",
-                0, Items.BREAD, "sticky",
+                1, Items.BREAD, "sticky",
                 "custom", "Earn 'A Seedy Place'",
                 SkillNodeCategory.SIMPLE,
                 null,

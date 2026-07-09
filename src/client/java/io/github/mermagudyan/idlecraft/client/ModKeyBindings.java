@@ -12,6 +12,8 @@ import io.github.mermagudyan.idlecraft.client.screen.IdlecraftScreen;
 public class ModKeyBindings implements ClientModInitializer {
 
     public static KeyMapping openPrestigeKey;
+    public static KeyMapping upgradeKey;
+    public static KeyMapping sacrificeKey;
 
     public static final KeyMapping.Category IDLECRAFT_CATEGORY = KeyMapping.Category.register(Identifier.fromNamespaceAndPath("idlecraft", "categories/idlecraft"));
 
@@ -21,6 +23,20 @@ public class ModKeyBindings implements ClientModInitializer {
                 "key.idlecraft.prestige",
                 InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K,
+                IDLECRAFT_CATEGORY
+        ));
+
+        upgradeKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.idlecraft.upgrade",
+                InputConstants.Type.MOUSE,
+                GLFW.GLFW_MOUSE_BUTTON_LEFT,
+                IDLECRAFT_CATEGORY
+        ));
+
+        sacrificeKey = KeyMappingHelper.registerKeyMapping(new KeyMapping(
+                "key.idlecraft.sacrifice",
+                InputConstants.Type.MOUSE,
+                GLFW.GLFW_MOUSE_BUTTON_RIGHT,
                 IDLECRAFT_CATEGORY
         ));
 

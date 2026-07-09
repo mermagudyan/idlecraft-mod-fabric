@@ -1,5 +1,7 @@
 {
   "key.categories.idlecraft": "Idlecraft",
   "key.category.idlecraft.idlecraft": "Idlecraft",
-  "key.idlecraft.prestige": "Open Menu"
+  "key.idlecraft.prestige": "Open Menu",
+  "key.idlecraft.upgrade": "Upgrade Node",
+  "key.idlecraft.sacrifice": "Sacrifice"
 }

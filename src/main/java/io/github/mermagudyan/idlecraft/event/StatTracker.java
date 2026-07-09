@@ -63,6 +63,22 @@ public class StatTracker {
             progress.put("crafting_table_unlock", 1);
         }
 
+        if (!data.hasStatBase(player.getUUID(), "cobblestone_mined")) {
+            data.setStatBase(player.getUUID(), "cobblestone_mined", getCobblestoneMined(player));
+        }
+        int baseCobble = data.getStatBase(player.getUUID(), "cobblestone_mined");
+        int currentCobble = getCobblestoneMined(player);
+        int deltaCobble = Math.max(0, currentCobble - baseCobble);
+        progress.put("cobblestone", Math.min(deltaCobble, 18));
+
+        if (!data.hasStatBase(player.getUUID(), "planks_crafted")) {
+            data.setStatBase(player.getUUID(), "planks_crafted", getPlanksCrafted(player));
+        }
+        int basePlanks = data.getStatBase(player.getUUID(), "planks_crafted");
+        int currentPlanks = getPlanksCrafted(player);
+        int deltaPlanks = Math.max(0, currentPlanks - basePlanks);
+        progress.put("stonecutter", Math.min(deltaPlanks, 8));
+
         var advManager = server.getAdvancements();
         var adv = advManager.get(Identifier.fromNamespaceAndPath("minecraft", "husbandry/plant_seed"));
         if (adv != null && player.getAdvancements().getOrStartProgress(adv).isDone()) {
@@ -91,5 +107,13 @@ public class StatTracker {
 
     public static int getWoodMinedWithAxe(ServerPlayer player) {
         return getWoodMined(player);
+    }
+
+    public static int getCobblestoneMined(ServerPlayer player) {
+        return player.getStats().getValue(Stats.BLOCK_MINED.get(Blocks.COBBLESTONE));
+    }
+
+    public static int getPlanksCrafted(ServerPlayer player) {
+        return player.getStats().getValue(Stats.ITEM_CRAFTED.get(Items.OAK_PLANKS));
     }
 }

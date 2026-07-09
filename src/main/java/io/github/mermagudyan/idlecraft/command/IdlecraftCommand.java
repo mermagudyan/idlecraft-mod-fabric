@@ -262,6 +262,7 @@ public class IdlecraftCommand {
         data.resetAll(player.getUUID());
         IdlecraftNetworking.syncPointsToClient(player);
         IdlecraftNetworking.syncNodesToClient(player);
+        IdlecraftNetworking.syncSacrificeState(player);
         source.sendSuccess(() -> Component.literal("[Idlecraft] Progress reset."), false);
         return 1;
     }
