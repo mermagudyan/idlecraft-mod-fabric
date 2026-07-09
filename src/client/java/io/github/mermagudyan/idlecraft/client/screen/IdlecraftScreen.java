@@ -176,7 +176,7 @@ public class IdlecraftScreen extends Screen {
                 b -> this.onClose()
         ).bounds(this.width / 2 + 5, yPrestige, 150, 20).build());
 
-        String reportLabel = "  Report Bugs";
+        String reportLabel = "Report Bugs";
         int reportW = this.font.width(reportLabel) + 16;
         this.reportBtnX = this.width - reportW - 6;
         this.reportBtnY = this.height - 25;
@@ -602,12 +602,6 @@ public class IdlecraftScreen extends Screen {
         updateCameraAnim(partialTick);
         renderHud(guiGraphics);
 
-        int iconSize = 12;
-        int iconX = this.reportBtnX + 4;
-        int iconY = this.reportBtnY + (20 - iconSize) / 2;
-        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED,
-                Identifier.fromNamespaceAndPath("idlecraft", "bug"), iconX, iconY, iconSize, iconSize);
-
         super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
@@ -998,7 +992,9 @@ public class IdlecraftScreen extends Screen {
                     guiGraphics.text(this.font, line, x + pad, textY, 0xFFFFFFFF, true);
                     firstCond = false;
                 } else {
-                    guiGraphics.text(this.font, Component.literal(sub), x + pad, textY, 0xFFFFFFFF, true);
+                    guiGraphics.text(this.font,
+                            Component.literal(sub).withStyle(allCondMet ? ChatFormatting.GREEN : ChatFormatting.RED),
+                            x + pad, textY, 0xFFFFFFFF, true);
                 }
                 textY += lineH;
             }
@@ -1014,7 +1010,9 @@ public class IdlecraftScreen extends Screen {
                     guiGraphics.text(this.font, line, x + pad, textY, 0xFFFFFFFF, true);
                     firstSac = false;
                 } else {
-                    guiGraphics.text(this.font, Component.literal(sub), x + pad, textY, 0xFFFFFFFF, true);
+                    guiGraphics.text(this.font,
+                            Component.literal(sub).withStyle(allSacMet ? ChatFormatting.GREEN : ChatFormatting.RED),
+                            x + pad, textY, 0xFFFFFFFF, true);
                 }
                 textY += lineH;
             }
