@@ -9,9 +9,6 @@ import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import io.github.mermagudyan.idlecraft.network.SacrificeStatePayload;
 import io.github.mermagudyan.idlecraft.network.DebugStatePayload;
 import io.github.mermagudyan.idlecraft.network.ClearConfirmPayload;
-import io.github.mermagudyan.idlecraft.network.StructureBlockedPayload;
-import io.github.mermagudyan.idlecraft.network.StructureRegionPayload;
-import io.github.mermagudyan.idlecraft.client.StructureBreakBlocker;
 import io.github.mermagudyan.idlecraft.client.screen.ClearConfirmScreen;
 
 public class ClientNetworkInit implements ClientModInitializer {
@@ -43,19 +40,6 @@ public class ClientNetworkInit implements ClientModInitializer {
                             payload.parentName(),
                             payload.removedCount()));
                 })
-        );
-
-        ClientPlayNetworking.registerGlobalReceiver(StructureBlockedPayload.TYPE,
-                (payload, ctx) -> ctx.client().execute(() -> {
-                    StructureBreakBlocker.markProtected(payload.pos());
-                    if (ctx.client().gameMode != null) {
-                        ctx.client().gameMode.stopDestroyBlock();
-                    }
-                })
-        );
-
-        ClientPlayNetworking.registerGlobalReceiver(StructureRegionPayload.TYPE,
-                (payload, ctx) -> ctx.client().execute(() -> StructureBreakBlocker.addRegions(payload.boxes()))
         );
     }
 }

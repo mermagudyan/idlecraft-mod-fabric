@@ -109,27 +109,6 @@ public class IdlecraftCommand {
             return 0;
         }
 
-        String lower = nodeArg.toLowerCase();
-        if (lower.equals("all") || lower.equals("full")) {
-            PlayerData data = PlayerData.getServer(player.level().getServer());
-            List<String> alreadyUnlocked = data.getUnlockedNodes(player.getUUID());
-            List<String> newlyUnlocked = new ArrayList<>();
-            for (SkillNode n : SkillNodeRegistry.getAll()) {
-                if (!alreadyUnlocked.contains(n.id)) {
-                    data.unlockNode(player.getUUID(), n.id);
-                    newlyUnlocked.add(n.id);
-                }
-                for (int i = 0; i < n.sacrifices.size(); i++) {
-                    data.setSacrificeProgress(player.getUUID(), n.id, i, n.sacrifices.get(i).amount());
-                }
-            }
-            IdlecraftNetworking.syncNodesToClient(player);
-            IdlecraftNetworking.syncSacrificeState(player);
-            source.sendSuccess(() -> Component.literal("[Idlecraft] Unlocked all nodes"
-                    + (newlyUnlocked.isEmpty() ? "" : " (" + newlyUnlocked.size() + " new)")), false);
-            return 1;
-        }
-
         SkillNode target = null;
         for (SkillNode n : SkillNodeRegistry.getAll()) {
             if (n.id.equalsIgnoreCase(nodeArg) || n.name.equalsIgnoreCase(nodeArg)) {

@@ -6,8 +6,7 @@
   "mixins": [],
   "client": [
     "AdvancementsScreenMixin",
-    "CraftingResultSlotMixin",
-    "BlockBreakClientMixin"
+    "CraftingResultSlotMixin"
   ],
   "injectors": {
     "defaultRequire": 1

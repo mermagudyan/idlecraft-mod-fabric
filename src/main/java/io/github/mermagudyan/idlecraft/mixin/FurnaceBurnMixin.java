@@ -28,14 +28,7 @@ public abstract class FurnaceBurnMixin {
             cir.setReturnValue(0);
             return;
         }
-        double mult = 0.125;
-        if (io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge) {
-            mult = 0.25;
-        }
-        int result = (int)(base * mult);
-        if (result <= 0) {
-            result = base > 0 ? 1 : 0;
-        }
-        cir.setReturnValue(result);
+        int multiplier = io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge ? 4 : 1;
+        cir.setReturnValue(base * multiplier);
     }
 }
