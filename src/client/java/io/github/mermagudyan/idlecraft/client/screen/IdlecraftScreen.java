@@ -1,9 +1,14 @@
 package io.github.mermagudyan.idlecraft.client.screen;
 
 import io.github.mermagudyan.idlecraft.screen.SkillNode;
+import io.github.mermagudyan.idlecraft.screen.SkillNodeRegistry;
+import io.github.mermagudyan.idlecraft.screen.SacrificeRequirement;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.gui.screens.ConfirmLinkScreen;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.renderer.RenderPipelines;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.network.chat.Component;
 import net.minecraft.ChatFormatting;
@@ -41,6 +46,9 @@ public class IdlecraftScreen extends Screen {
     private float animProgress = 0.0f;
 
     private float cameraX = 0.0f, cameraY = 0.0f, zoom = 1.0f;
+    private static float savedCameraX = 0.0f, savedCameraY = 0.0f, savedZoom = 1.0f;
+    private static boolean cameraSaved = false;
+    private static IdlecraftScreen activeScreen = null;
     private boolean dragging = false;
     private double lastDragX, lastDragY;
     private double mouseX = 0, mouseY = 0;
@@ -59,9 +67,11 @@ public class IdlecraftScreen extends Screen {
     private float returnAngle = 0.0f;
     private int returnX = 0, returnY = 0;
     private float tooltipFade = 0.0f;
+    private int reportBtnX = 0, reportBtnY = 0, reportBtnW = 0;
 
     public IdlecraftScreen() {
         super(Component.literal("Idlecraft"));
+        activeScreen = this;
         for (SkillNode n : SkillNode.defaults()) nodes.put(n.id, n);
         for (String id : ClientState.getUnlockedNodes()) {
             SkillNode n = nodes.get(id);
@@ -72,6 +82,32 @@ public class IdlecraftScreen extends Screen {
         if (!unlocked.isEmpty()) {
             lastUnlockedNode = nodes.get(unlocked.get(unlocked.size() - 1));
         }
+
+        SkillNode startNode = nodes.get("start");
+        boolean startUnlocked = unlocked.contains("start");
+        if (cameraSaved && startUnlocked) {
+            cameraX = savedCameraX;
+            cameraY = savedCameraY;
+            zoom = savedZoom;
+        } else if (startNode != null) {
+            cameraX = startNode.x;
+            cameraY = startNode.y;
+            zoom = 1.0f;
+        }
+    }
+
+    @Override
+    public void onClose() {
+        savedCameraX = cameraX;
+        savedCameraY = cameraY;
+        savedZoom = zoom;
+        cameraSaved = true;
+        if (activeScreen == this) activeScreen = null;
+        super.onClose();
+    }
+
+    public static IdlecraftScreen getActiveScreen() {
+        return activeScreen;
     }
 
     private void startCameraAnim(float targetX, float targetY) {
@@ -131,6 +167,22 @@ public class IdlecraftScreen extends Screen {
                 Component.literal("Close"),
                 b -> this.onClose()
         ).bounds(this.width / 2 + 5, yPrestige, 150, 20).build());
+
+        int reportW = this.font.width("Report Bugs") + 24;
+        this.reportBtnX = this.width - reportW - 6;
+        this.reportBtnY = this.height - 25;
+        this.reportBtnW = reportW;
+        this.addRenderableWidget(Button.builder(
+                Component.literal("  Report Bugs"),
+                b -> {
+                    if (this.minecraft != null) {
+                        this.minecraft.setScreenAndShow(new ConfirmLinkScreen(
+                                accepted -> this.minecraft.setScreenAndShow(this),
+                                "https://github.com/mermagudyan/idlecraft-mod-fabric/discussions",
+                                true));
+                    }
+                }
+        ).bounds(this.reportBtnX, this.reportBtnY, reportW, 20).build());
     }
 
     private boolean canUnlock(SkillNode n) {
@@ -170,10 +222,15 @@ public class IdlecraftScreen extends Screen {
         }
         if ("stone_1".equals(n.id)) {
             SkillNode axeNode = nodes.get("axe_node");
-            return axeNode != null && axeNode.unlocked;
+            if (axeNode == null || !axeNode.unlocked) return false;
+            List<SkillNode> branchLeaves = SkillNodeRegistry.getLeavesOfBranch(SkillNodeRegistry.BRANCH_TUTORIAL);
+            for (SkillNode ln : branchLeaves) {
+                if (!ClientState.getUnlockedNodes().contains(ln.id)) return false;
+            }
+            return true;
         }
         if ("tech_1".equals(n.id)) {
-            return ClientState.getProgress("seedy_place") >= 1;
+            return ClientState.getUnlockedNodes().contains("bread_sac");
         }
         return true;
     }
@@ -229,7 +286,9 @@ public class IdlecraftScreen extends Screen {
                     holdProgress = 0.0f;
                     return true;
                 } else if (!hoverNode.sacrifices.isEmpty()) {
-                    ClientPlayNetworking.send(new SacrificeOfferPayload(hoverNode.id));
+                    if (!animatingCamera) {
+                        ClientPlayNetworking.send(new SacrificeOfferPayload(hoverNode.id));
+                    }
                     return true;
                 }
                 return true;
@@ -327,11 +386,8 @@ public class IdlecraftScreen extends Screen {
 
     @Override
     public void tick() {
-        if (animatingCamera) {
-            if (pressedNode != null) {
-                hoverNode = pressedNode;
-            }
-            return;
+        if (animatingCamera && pressedNode != null) {
+            hoverNode = pressedNode;
         }
 
         float baseSpeed = 6.0f;
@@ -404,22 +460,27 @@ public class IdlecraftScreen extends Screen {
     }
 
     private SkillNode getReturnTarget() {
-        SkillNode immediate = null;
-        SkillNode any = null;
+        SkillNode bestUnlockable = null;
+        float bestUnlockableDist = Float.MAX_VALUE;
+        SkillNode bestLocked = null;
+        float bestLockedDist = Float.MAX_VALUE;
         for (SkillNode n : nodes.values()) {
             if (n.unlocked || !isNodeVisible(n)) continue;
-            if (canUnlock(n)) return n;
-            if (n.parentId == null) {
-                if (any == null) any = n;
-                continue;
+            float dist = (n.x - cameraX) * (n.x - cameraX) + (n.y - cameraY) * (n.y - cameraY);
+            if (canUnlock(n)) {
+                if (dist < bestUnlockableDist) {
+                    bestUnlockableDist = dist;
+                    bestUnlockable = n;
+                }
+            } else {
+                if (dist < bestLockedDist) {
+                    bestLockedDist = dist;
+                    bestLocked = n;
+                }
             }
-            SkillNode p = nodes.get(n.parentId);
-            if (p != null && p.unlocked) {
-                if (immediate == null) immediate = n;
-            } else if (any == null) any = n;
         }
-        if (immediate != null) return immediate;
-        if (any != null) return any;
+        if (bestUnlockable != null) return bestUnlockable;
+        if (bestLocked != null) return bestLocked;
         return nodes.get("start");
     }
 
@@ -485,6 +546,13 @@ public class IdlecraftScreen extends Screen {
         renderReturnButton(guiGraphics);
         updateCameraAnim(partialTick);
         renderHud(guiGraphics);
+
+        int iconSize = 12;
+        int iconX = this.reportBtnX + 4;
+        int iconY = this.reportBtnY + (20 - iconSize) / 2;
+        guiGraphics.blitSprite(RenderPipelines.GUI_TEXTURED,
+                Identifier.fromNamespaceAndPath("idlecraft", "bug"), iconX, iconY, iconSize, iconSize);
+
         super.extractRenderState(guiGraphics, mouseX, mouseY, partialTick);
     }
 
@@ -513,6 +581,7 @@ public class IdlecraftScreen extends Screen {
     }
 
     private boolean isNodeVisible(SkillNode n) {
+        if (n.unlocked) return true;
         if (n.id.equals("start")) return true;
 
         if (n.id.equals("axe_node")) {
@@ -524,6 +593,20 @@ public class IdlecraftScreen extends Screen {
         if (n.id.equals("stone_1")) {
             SkillNode axe = nodes.get("axe_node");
             return axe != null && isNodeVisible(axe);
+        }
+
+        if (n.id.equals("bread_sac")) {
+            SkillNode parent = nodes.get(n.parentId);
+            return parent != null && parent.unlocked && ClientState.getProgress("seedy_place") >= 1;
+        }
+
+        if (n.id.equals("tech_1")) {
+            return ClientState.getUnlockedNodes().contains("bread_sac");
+        }
+
+        if (n.id.equals("tech_2") || n.id.equals("tech_3")) {
+            SkillNode parent = nodes.get("tech_1");
+            return parent != null && parent.unlocked;
         }
 
         if (n.parentId == null) return false;
@@ -666,7 +749,9 @@ public class IdlecraftScreen extends Screen {
         String pointsStr = "Your points: " + ClientState.getPoints();
 
         String condStr = null;
+        String condStr2 = null;
         boolean conditionMet = false;
+        boolean conditionMet2 = false;
         if (!n.unlocked && n.conditionText != null && !n.conditionText.isEmpty()) {
             if ("first_steps".equals(n.id)) {
                 int progress = ClientState.getProgress("first_steps");
@@ -687,10 +772,19 @@ public class IdlecraftScreen extends Screen {
                 int progress = ClientState.getProgress("wood_mined_axe");
                 condStr = "Condition: " + n.conditionText + " (" + progress + "/16)";
                 conditionMet = (progress >= 16);
-            } else if ("stone_1".equals(n.id)) {
+            } else             if ("stone_1".equals(n.id)) {
                 SkillNode axeNode = nodes.get("axe_node");
-                conditionMet = axeNode != null && axeNode.unlocked;
-                condStr = "Condition: " + n.conditionText + (conditionMet ? " (Done)" : "");
+                boolean axeDone = axeNode != null && axeNode.unlocked;
+                condStr = "Condition: " + n.conditionText + (axeDone ? " (Done)" : "");
+                conditionMet = axeDone;
+                List<SkillNode> branchLeaves = SkillNodeRegistry.getLeavesOfBranch(SkillNodeRegistry.BRANCH_TUTORIAL);
+                int total = branchLeaves.size();
+                int done = 0;
+                for (SkillNode ln : branchLeaves) {
+                    if (ClientState.getUnlockedNodes().contains(ln.id)) done++;
+                }
+                condStr2 = "Condition: Upgrade tutorial branch (" + done + "/" + total + ")";
+                conditionMet2 = (done >= total);
             } else if ("tech_1".equals(n.id)) {
                 conditionMet = ClientState.getProgress("seedy_place") >= 1;
                 condStr = "Condition: " + n.conditionText + (conditionMet ? " (Done)" : "");
@@ -699,17 +793,35 @@ public class IdlecraftScreen extends Screen {
             }
         }
 
+        String sacStr = null;
+        boolean sacrificeDone = false;
+        if (!n.sacrifices.isEmpty()) {
+            int[] prog = ClientState.getSacrificeProgress(n.id);
+            StringBuilder req = new StringBuilder();
+            boolean allMet = true;
+            for (int i = 0; i < n.sacrifices.size(); i++) {
+                SacrificeRequirement r = n.sacrifices.get(i);
+                int cur = i < prog.length ? prog[i] : 0;
+                if (cur < r.amount()) allMet = false;
+                if (req.length() > 0) req.append(", ");
+                req.append(cur).append("/").append(r.amount());
+                if (!r.anyWood()) req.append("x ").append(r.item().getName(new ItemStack(r.item())).getString());
+            }
+            sacStr = "Sacrifice: " + req;
+            sacrificeDone = allMet;
+        }
+
         String grantsStr = null;
         String unlocksStr = null;
         int extraLines = 0;
         if (expandProgress > 0.01f) {
-            grantsStr = n.unlocked ? n.detailedDescription : "???";
+            grantsStr = n.detailedDescription;
             extraLines++;
             StringBuilder children = new StringBuilder();
             for (SkillNode child : nodes.values()) {
                 if (n.id.equals(child.parentId)) {
                     if (children.length() > 0) children.append(", ");
-                    children.append(n.unlocked ? child.name : "???");
+                    children.append(isNodeVisible(child) ? child.name : "???");
                 }
             }
             if (children.length() > 0) {
@@ -723,12 +835,15 @@ public class IdlecraftScreen extends Screen {
         int wCost = this.font.width(costStr);
         int wPts  = this.font.width(pointsStr);
         int wCond = condStr != null ? this.font.width(condStr) : 0;
+        int prefixW = this.font.width("Condition: ");
+        int wCond2 = condStr2 != null ? this.font.width(condStr2) : 0;
+        int wSac = sacStr != null ? this.font.width(sacStr) : 0;
         int wGrants = grantsStr != null ? this.font.width(grantsStr) : 0;
         int wUnlocks = unlocksStr != null ? this.font.width(unlocksStr) : 0;
 
-        int maxW = Math.max(Math.max(Math.max(wName, wDesc), wCost), Math.max(wPts, Math.max(wCond, Math.max(wGrants, wUnlocks))));
+        int maxW = Math.max(Math.max(Math.max(wName, wDesc), wCost), Math.max(wPts, Math.max(Math.max(wCond, wCond2), Math.max(Math.max(wGrants, wUnlocks), wSac))));
         int w = maxW + pad * 2;
-        int baseLines = 4 + (condStr != null ? 1 : 0);
+        int baseLines = 4 + (condStr != null ? 1 : 0) + (condStr2 != null ? 1 : 0) + (sacStr != null ? 1 : 0);
         float animatedExtraLines = extraLines * expandProgress;
         int h = (int)(lineH * (baseLines + animatedExtraLines) + pad * 2);
 
@@ -767,6 +882,16 @@ public class IdlecraftScreen extends Screen {
         if (condStr != null) {
             int condColor = conditionMet ? 0xFF55FF55 : 0xFFFF5555;
             guiGraphics.text(this.font, Component.literal(condStr), x + pad, textY, condColor, true);
+            textY += lineH;
+        }
+        if (condStr2 != null) {
+            int condColor2 = conditionMet2 ? 0xFF55FF55 : 0xFFFF5555;
+            guiGraphics.text(this.font, Component.literal(condStr2), x + pad, textY, condColor2, true);
+            textY += lineH;
+        }
+        if (sacStr != null) {
+            int sacColor = sacrificeDone ? 0xFF55FF55 : 0xFFFF5555;
+            guiGraphics.text(this.font, Component.literal(sacStr), x + pad, textY, sacColor, true);
             textY += lineH;
         }
         guiGraphics.text(this.font, Component.literal(pointsStr), x + pad, textY, 0xFF55FFFF, true);

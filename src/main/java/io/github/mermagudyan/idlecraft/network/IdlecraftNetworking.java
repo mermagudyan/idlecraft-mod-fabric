@@ -9,11 +9,14 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 import io.github.mermagudyan.idlecraft.event.StatTracker;
 import java.util.Map;
 import java.util.List;
 import io.github.mermagudyan.idlecraft.screen.SkillNode;
 import io.github.mermagudyan.idlecraft.screen.SacrificeRequirement;
+import io.github.mermagudyan.idlecraft.command.IdlecraftCommand;
+import net.minecraft.world.item.Item;
 import java.util.HashMap;
 
 public class IdlecraftNetworking {
@@ -27,6 +30,8 @@ public class IdlecraftNetworking {
         PayloadTypeRegistry.serverboundPlay().register(SacrificeOfferPayload.TYPE, SacrificeOfferPayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(SacrificeStatePayload.TYPE, SacrificeStatePayload.STREAM_CODEC);
         PayloadTypeRegistry.clientboundPlay().register(DebugStatePayload.TYPE, DebugStatePayload.STREAM_CODEC);
+        PayloadTypeRegistry.clientboundPlay().register(ClearConfirmPayload.TYPE, ClearConfirmPayload.STREAM_CODEC);
+        PayloadTypeRegistry.serverboundPlay().register(ClearNodesPayload.TYPE, ClearNodesPayload.STREAM_CODEC);
 
         ServerPlayNetworking.registerGlobalReceiver(SacrificeOfferPayload.TYPE,
                 (payload, ctx) -> {
@@ -36,6 +41,26 @@ public class IdlecraftNetworking {
                     server.execute(() -> handleSacrifice(player, server, payload.nodeId()));
                 }
         );
+        ServerPlayNetworking.registerGlobalReceiver(ClearNodesPayload.TYPE,
+                (payload, ctx) -> {
+                    ServerPlayer player = ctx.player();
+                    MinecraftServer server = player.level().getServer();
+                    if (server == null) return;
+                    server.execute(() -> {
+                        String nodeId = payload.nodeId();
+                        SkillNode target = null;
+                        for (SkillNode n : SkillNodeRegistry.getAll()) {
+                            if (n.id.equals(nodeId)) { target = n; break; }
+                        }
+                        if (target == null) return;
+                        java.util.List<String> toRemove = new java.util.ArrayList<>();
+                        IdlecraftCommand.collectDescendants(SkillNodeRegistry.getAll(), nodeId, toRemove);
+                        if (!toRemove.contains(nodeId)) toRemove.add(nodeId);
+                        IdlecraftCommand.performClear(player, target, toRemove);
+                    });
+                }
+        );
+
         ServerPlayNetworking.registerGlobalReceiver(ResetRewardedPayload.TYPE,
                 (payload, ctx) -> {
                     ServerPlayer player = ctx.player();
@@ -85,6 +110,12 @@ public class IdlecraftNetworking {
                             if (!unlocked.contains("axe_node")) {
                                 player.sendSystemMessage(Component.literal("[Idlecraft] Condition not met: Unlock axe branch."));
                                 return;
+                            }
+                            for (SkillNode leaf : SkillNodeRegistry.getLeavesOfBranch(SkillNodeRegistry.BRANCH_TUTORIAL)) {
+                                if (!unlocked.contains(leaf.id)) {
+                                    player.sendSystemMessage(Component.literal("[Idlecraft] Condition not met: Upgrade tutorial branch."));
+                                    return;
+                                }
                             }
                         }
 
@@ -156,31 +187,69 @@ public class IdlecraftNetworking {
 
         if (node.parentId != null && !data.getUnlockedNodes(player.getUUID()).contains(node.parentId)) return;
 
-        boolean allMet = true;
-        for (int i = 0; i < node.sacrifices.size(); i++) {
-            SacrificeRequirement req = node.sacrifices.get(i);
+        for (SacrificeRequirement req : node.sacrifices) {
             List<Integer> prog = data.getSacrificeProgress(player.getUUID(), nodeId);
-            int current = i < prog.size() ? prog.get(i) : 0;
-            if (current < req.amount()) {
-                allMet = false;
-                if (player.getInventory().contains(new ItemStack(req.item()))) {
-                    int slot = player.getInventory().findSlotMatchingItem(new ItemStack(req.item()));
-                    if (slot < 0) continue;
-                    player.getInventory().getItem(slot).shrink(1);
-                    data.setSacrificeProgress(player.getUUID(), nodeId, i, current + 1);
-                    syncSacrificeState(player);
-                    allMet = true;
-                    for (int j = 0; j < node.sacrifices.size(); j++) {
-                        SacrificeRequirement r = node.sacrifices.get(j);
-                        List<Integer> p = data.getSacrificeProgress(player.getUUID(), nodeId);
-                        int c = j < p.size() ? p.get(j) : 0;
-                        if (c < r.amount()) { allMet = false; break; }
-                    }
-                    break;
-                }
+            int idx = node.sacrifices.indexOf(req);
+            int current = idx < prog.size() ? prog.get(idx) : 0;
+            if (current < req.amount() && hasRequiredItem(player, req)) {
+                infuseItem(player, server, node, req);
+                break;
             }
         }
+    }
 
+    private static boolean hasRequiredItem(ServerPlayer player, SacrificeRequirement req) {
+        if (req.anyWood()) {
+            for (Item wood : WOOD_ITEMS) {
+                if (player.getInventory().contains(new ItemStack(wood))) return true;
+            }
+            return false;
+        }
+        return player.getInventory().contains(new ItemStack(req.item()));
+    }
+
+    private static Item findInfuseItem(ServerPlayer player, SacrificeRequirement req) {
+        if (req.anyWood()) {
+            for (Item wood : WOOD_ITEMS) {
+                if (player.getInventory().contains(new ItemStack(wood))) return wood;
+            }
+            return null;
+        }
+        return req.item();
+    }
+
+    private static final java.util.List<Item> WOOD_ITEMS = java.util.List.of(
+            Items.OAK_LOG, Items.SPRUCE_LOG, Items.BIRCH_LOG, Items.JUNGLE_LOG,
+            Items.ACACIA_LOG, Items.DARK_OAK_LOG, Items.CHERRY_LOG, Items.MANGROVE_LOG,
+            Items.PALE_OAK_LOG, Items.CRIMSON_STEM, Items.WARPED_STEM,
+            Items.OAK_WOOD, Items.SPRUCE_WOOD, Items.BIRCH_WOOD, Items.JUNGLE_WOOD,
+            Items.ACACIA_WOOD, Items.DARK_OAK_WOOD, Items.CHERRY_WOOD, Items.MANGROVE_WOOD,
+            Items.PALE_OAK_WOOD, Items.CRIMSON_HYPHAE, Items.WARPED_HYPHAE
+    );
+
+    public static void infuseItem(ServerPlayer player, MinecraftServer server, SkillNode node, SacrificeRequirement req) {
+        PlayerData data = PlayerData.getServer(server);
+        String nodeId = node.id;
+        int idx = node.sacrifices.indexOf(req);
+        if (idx < 0) return;
+        List<Integer> prog = data.getSacrificeProgress(player.getUUID(), nodeId);
+        int current = idx < prog.size() ? prog.get(idx) : 0;
+        if (current >= req.amount()) return;
+        Item item = findInfuseItem(player, req);
+        if (item == null) return;
+        int slot = player.getInventory().findSlotMatchingItem(new ItemStack(item));
+        if (slot < 0) return;
+        player.getInventory().getItem(slot).shrink(1);
+        data.setSacrificeProgress(player.getUUID(), nodeId, idx, current + 1);
+        syncSacrificeState(player);
+
+        boolean allMet = true;
+        List<Integer> updated = data.getSacrificeProgress(player.getUUID(), nodeId);
+        for (int j = 0; j < node.sacrifices.size(); j++) {
+            SacrificeRequirement r = node.sacrifices.get(j);
+            int c = j < updated.size() ? updated.get(j) : 0;
+            if (c < r.amount()) { allMet = false; break; }
+        }
         if (allMet) {
             data.unlockNode(player.getUUID(), nodeId);
             data.clearSacrificeProgress(player.getUUID(), nodeId);
@@ -205,6 +274,15 @@ public class IdlecraftNetworking {
             progress.put(n.id, arr);
         }
         ServerPlayNetworking.send(player, new SacrificeStatePayload(progress));
+    }
+
+    private static void collectDescendants(SkillNode[] all, String rootId, java.util.List<String> out) {
+        for (SkillNode n : all) {
+            if (rootId.equals(n.parentId) && !out.contains(n.id)) {
+                out.add(n.id);
+                collectDescendants(all, n.id, out);
+            }
+        }
     }
 
     private static int getCost(String nodeId) {
@@ -237,5 +315,9 @@ public class IdlecraftNetworking {
         if (server == null) return;
         boolean d = PlayerData.getServer(server).isDebug(player.getUUID());
         ServerPlayNetworking.send(player, new DebugStatePayload(d));
+    }
+
+    public static void sendClearConfirm(ServerPlayer player, String nodeId, String targetName, String parentName, int removedCount) {
+        ServerPlayNetworking.send(player, new ClearConfirmPayload(nodeId, targetName, parentName, removedCount));
     }
 }

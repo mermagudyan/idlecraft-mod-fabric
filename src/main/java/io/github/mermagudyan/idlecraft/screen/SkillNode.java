@@ -19,6 +19,7 @@ public class SkillNode {
     public final String conditionText;
     public final SkillNodeCategory category;
     public final String effectId;
+    public final String branch;
 
     public boolean unlocked = false;
     public final List<SacrificeRequirement> sacrifices;
@@ -30,7 +31,16 @@ public class SkillNode {
                      String unlockCondition, String conditionText,
                      SkillNodeCategory category, String effectId) {
         this(id, x, y, size, name, description, detailedDescription, cost, icon, parentId,
-                unlockCondition, conditionText, category, effectId, List.of(), false);
+                unlockCondition, conditionText, category, effectId, List.of(), false, "");
+    }
+
+    public SkillNode(String id, float x, float y, int size,
+                     String name, String description, String detailedDescription,
+                     int cost, Item icon, String parentId,
+                     String unlockCondition, String conditionText,
+                     SkillNodeCategory category, String effectId, String branch) {
+        this(id, x, y, size, name, description, detailedDescription, cost, icon, parentId,
+                unlockCondition, conditionText, category, effectId, List.of(), false, branch);
     }
 
     public SkillNode(String id, float x, float y, int size,
@@ -38,7 +48,7 @@ public class SkillNode {
                      int cost, Item icon, String parentId,
                      String unlockCondition, String conditionText,
                      SkillNodeCategory category, String effectId,
-                     List<SacrificeRequirement> sacrifices, boolean hiddenUntilParent) {
+                     List<SacrificeRequirement> sacrifices, boolean hiddenUntilParent, String branch) {
         this.id = id;
         this.x = x;
         this.y = y;
@@ -53,6 +63,7 @@ public class SkillNode {
         this.conditionText = conditionText;
         this.category = category;
         this.effectId = effectId;
+        this.branch = branch;
         this.sacrifices = sacrifices;
         this.hiddenUntilParent = hiddenUntilParent;
     }

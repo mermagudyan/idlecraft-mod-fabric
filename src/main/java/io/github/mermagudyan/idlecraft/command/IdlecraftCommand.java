@@ -14,6 +14,8 @@ import net.minecraft.network.chat.Component;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.HashSet;
+import java.util.List;
+import java.util.ArrayList;
 
 import static net.minecraft.commands.Commands.argument;
 import static net.minecraft.commands.Commands.literal;
@@ -61,6 +63,16 @@ public class IdlecraftCommand {
                 .then(literal("reset")
                         .requires(IdlecraftCommand::isDebugOn)
                         .executes(ctx -> resetPlayer(ctx.getSource())))
+                .then(literal("clear")
+                        .requires(IdlecraftCommand::isDebugOn)
+                        .then(argument("node", StringArgumentType.word())
+                                .suggests((ctx, builder) -> {
+                                    for (SkillNode n : SkillNodeRegistry.getAll()) {
+                                        builder.suggest(n.id);
+                                    }
+                                    return builder.buildFuture();
+                                })
+                                .executes(ctx -> clearNode(ctx.getSource(), StringArgumentType.getString(ctx, "node")))))
         );
     }
 
@@ -125,10 +137,18 @@ public class IdlecraftCommand {
             }
             cur = curNode != null ? curNode.parentId : null;
         }
-        for (String id : toUnlock) data.unlockNode(player.getUUID(), id);
+
+        List<String> alreadyUnlocked = data.getUnlockedNodes(player.getUUID());
+        List<String> newlyUnlocked = new ArrayList<>();
+        for (String id : toUnlock) {
+            if (!alreadyUnlocked.contains(id)) {
+                data.unlockNode(player.getUUID(), id);
+                newlyUnlocked.add(id);
+            }
+        }
 
         final String unlockedName = target.name;
-        final int prereqCount = toUnlock.size() - 1;
+        final int prereqCount = newlyUnlocked.size() - 1;
         IdlecraftNetworking.syncNodesToClient(player);
         source.sendSuccess(() -> Component.literal("[Idlecraft] Unlocked: " + unlockedName
                 + (prereqCount > 0 ? " (+ " + prereqCount + " prerequisite(s))" : "")), false);
@@ -165,6 +185,73 @@ public class IdlecraftCommand {
         int pts = data.getPoints(player.getUUID());
         source.sendSuccess(() -> Component.literal("[Idlecraft] Current points: " + pts), false);
         return 1;
+    }
+
+    private static int clearNode(CommandSourceStack source, String nodeArg) {
+        if (requireDebug(source) == 0) return 0;
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendSuccess(() -> Component.literal("[Idlecraft] Run this command in-game."), false);
+            return 0;
+        }
+
+        SkillNode target = null;
+        for (SkillNode n : SkillNodeRegistry.getAll()) {
+            if (n.id.equalsIgnoreCase(nodeArg) || n.name.equalsIgnoreCase(nodeArg)) {
+                target = n;
+                break;
+            }
+        }
+        if (target == null) {
+            source.sendSuccess(() -> Component.literal("[Idlecraft] Unknown node: " + nodeArg), false);
+            return 0;
+        }
+
+        List<String> toRemove = new ArrayList<>();
+        collectDescendants(SkillNodeRegistry.getAll(), target.id, toRemove);
+        if (!toRemove.contains(target.id)) toRemove.add(target.id);
+
+        if (toRemove.size() <= 1) {
+            performClear(player, target, toRemove);
+            return 1;
+        }
+
+        String parentName = "Start";
+        if (target.parentId != null) {
+            for (SkillNode n : SkillNodeRegistry.getAll()) {
+                if (n.id.equals(target.parentId)) {
+                    parentName = n.name;
+                    break;
+                }
+            }
+        }
+        IdlecraftNetworking.sendClearConfirm(player, target.id, target.name, parentName, toRemove.size());
+        return 1;
+    }
+
+    public static void collectDescendants(SkillNode[] all, String rootId, List<String> out) {
+        for (SkillNode n : all) {
+            if (rootId.equals(n.parentId) && !out.contains(n.id)) {
+                out.add(n.id);
+                collectDescendants(all, n.id, out);
+            }
+        }
+    }
+
+    public static void performClear(ServerPlayer player, SkillNode target, List<String> toRemove) {
+        PlayerData data = PlayerData.getServer(player.level().getServer());
+        List<String> unlocked = data.getUnlockedNodes(player.getUUID());
+        for (String id : toRemove) {
+            unlocked.remove(id);
+            data.clearSacrificeProgress(player.getUUID(), id);
+        }
+        data.setStatBase(player.getUUID(), "sticks_picked", 0);
+        data.setStatBase(player.getUUID(), "wood_mined", 0);
+        data.setStatBase(player.getUUID(), "wood_mined_axe", 0);
+        IdlecraftNetworking.syncNodesToClient(player);
+        IdlecraftNetworking.syncSacrificeState(player);
+        player.sendSystemMessage(Component.literal("[Idlecraft] Cleared " + toRemove.size()
+                + " node(s) up to " + target.name));
     }
 
     private static int resetPlayer(CommandSourceStack source) {

@@ -8,6 +8,8 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import io.github.mermagudyan.idlecraft.network.SacrificeStatePayload;
 import io.github.mermagudyan.idlecraft.network.DebugStatePayload;
+import io.github.mermagudyan.idlecraft.network.ClearConfirmPayload;
+import io.github.mermagudyan.idlecraft.client.screen.ClearConfirmScreen;
 
 public class ClientNetworkInit implements ClientModInitializer {
     @Override
@@ -27,6 +29,17 @@ public class ClientNetworkInit implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(DebugStatePayload.TYPE,
                 (payload, ctx) -> ctx.client().execute(() -> ClientState.setDebug(payload.debug()))
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(ClearConfirmPayload.TYPE,
+                (payload, ctx) -> ctx.client().execute(() -> {
+                    if (ctx.client().player == null) return;
+                    ctx.client().setScreenAndShow(new ClearConfirmScreen(
+                            io.github.mermagudyan.idlecraft.client.screen.IdlecraftScreen.getActiveScreen(),
+                            payload.nodeId(),
+                            payload.parentName(),
+                            payload.removedCount()));
+                })
         );
     }
 }
