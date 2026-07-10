@@ -7,6 +7,7 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.stats.Stats;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
@@ -85,7 +86,32 @@ public class StatTracker {
             progress.put("seedy_place", 1);
         }
 
+        if (data.getUnlockedNodes(player.getUUID()).contains("stone_1")) {
+            long day = player.level().getGameTime() / 24000L;
+            if (day >= 1) progress.put("days_survived", 1);
+        }
+
+        progress.put("cave_dark_damage", data.getFurnaceCounter(player.getUUID(), "cave_dark_damage"));
+        progress.put("cave_hunger_damage", data.getFurnaceCounter(player.getUUID(), "cave_hunger_damage"));
+        progress.put("crafted_quality", data.getFurnaceCounter(player.getUUID(), "crafted_quality"));
+
+        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
+            net.minecraft.world.item.ItemStack stack = player.getInventory().getItem(i);
+            if (!stack.isEmpty() && isMeat(stack.getItem())) {
+                data.setHeldMeat(player.getUUID(), true);
+                break;
+            }
+        }
+
         IdlecraftNetworking.syncConditionProgress(player, progress);
+    }
+
+    private static boolean isMeat(net.minecraft.world.item.Item item) {
+        return item == Items.PORKCHOP || item == Items.BEEF || item == Items.CHICKEN
+                || item == Items.RABBIT || item == Items.COD || item == Items.SALMON
+                || item == Items.MUTTON || item == Items.COOKED_PORKCHOP || item == Items.COOKED_BEEF
+                || item == Items.COOKED_CHICKEN || item == Items.COOKED_RABBIT || item == Items.COOKED_COD
+                || item == Items.COOKED_SALMON || item == Items.COOKED_MUTTON;
     }
 
     public static int getSticksPicked(ServerPlayer player) {
@@ -114,6 +140,15 @@ public class StatTracker {
     }
 
     public static int getPlanksCrafted(ServerPlayer player) {
-        return player.getStats().getValue(Stats.ITEM_CRAFTED.get(Items.OAK_PLANKS));
+        Item[] planks = {
+                Items.OAK_PLANKS, Items.SPRUCE_PLANKS, Items.BIRCH_PLANKS, Items.JUNGLE_PLANKS,
+                Items.ACACIA_PLANKS, Items.DARK_OAK_PLANKS, Items.CHERRY_PLANKS, Items.MANGROVE_PLANKS,
+                Items.PALE_OAK_PLANKS, Items.BAMBOO_PLANKS, Items.CRIMSON_PLANKS, Items.WARPED_PLANKS
+        };
+        int total = 0;
+        for (Item plank : planks) {
+            total += player.getStats().getValue(Stats.ITEM_CRAFTED.get(plank));
+        }
+        return total;
     }
 }

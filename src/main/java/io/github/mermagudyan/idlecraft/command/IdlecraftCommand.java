@@ -3,13 +3,27 @@ package io.github.mermagudyan.idlecraft.command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.Dynamic2CommandExceptionType;
+import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
+import io.github.mermagudyan.idlecraft.common.QualityComponent;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
 import io.github.mermagudyan.idlecraft.screen.SkillNode;
 import io.github.mermagudyan.idlecraft.screen.SkillNodeRegistry;
+import net.minecraft.commands.CommandBuildContext;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.ResourceArgument;
+import net.minecraft.commands.arguments.item.ItemArgument;
+import net.minecraft.commands.arguments.item.ItemInput;
+import net.minecraft.core.Holder;
+import net.minecraft.core.registries.Registries;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.enchantment.Enchantment;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -22,8 +36,29 @@ import static net.minecraft.commands.Commands.literal;
 
 public class IdlecraftCommand {
 
-    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+    private static final String[] QUALITY_NAMES = {
+            "poor", "so-so", "normal", "excellent", "superior", "corrupted"
+    };
+
+    private static final DynamicCommandExceptionType ERROR_QUALITY =
+            new DynamicCommandExceptionType(o -> Component.literal("[Idlecraft] Unknown quality: " + o
+                    + " (poor, so-so, normal, excellent, superior, corrupted)"));
+    private static final Dynamic2CommandExceptionType ERROR_ENCHANT_CAP =
+            new Dynamic2CommandExceptionType((lvl, cap) -> Component.literal(
+                    "[Idlecraft] Enchant level " + lvl + " exceeds the quality cap (" + cap + ")"));
+
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher, CommandBuildContext buildContext) {
         dispatcher.register(literal("idlecraft")
+                .then(literal("create")
+                        .requires(IdlecraftCommand::isDebugOn)
+                        .then(argument("item", ItemArgument.item(buildContext))
+                                .then(argument("durability", IntegerArgumentType.integer(1, 100))
+                                        .then(argument("quality", StringArgumentType.word())
+                                                .suggests((ctx, b) -> SharedSuggestionProvider.suggest(QUALITY_NAMES, b))
+                                                .executes(ctx -> createItem(ctx, false))
+                                                .then(argument("enchantment", ResourceArgument.resource(buildContext, Registries.ENCHANTMENT))
+                                                        .then(argument("level", IntegerArgumentType.integer(1))
+                                                                .executes(ctx -> createItem(ctx, true))))))))
                 .then(literal("debug")
                         .then(literal("on").executes(ctx -> setDebug(ctx.getSource(), true)))
                         .then(literal("off").executes(ctx -> setDebug(ctx.getSource(), false)))
@@ -248,6 +283,61 @@ public class IdlecraftCommand {
         }
         IdlecraftNetworking.sendClearConfirm(player, target.id, target.name, parentName, toRemove.size());
         return 1;
+    }
+
+    private static int createItem(CommandContext<CommandSourceStack> ctx,
+                                  boolean withEnchant) throws CommandSyntaxException {
+        CommandSourceStack source = ctx.getSource();
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendSuccess(() -> Component.literal("[Idlecraft] Run this command in-game."), false);
+            return 0;
+        }
+
+        ItemInput input = ItemArgument.getItem(ctx, "item");
+        int durability = IntegerArgumentType.getInteger(ctx, "durability");
+        int quality = parseQuality(StringArgumentType.getString(ctx, "quality").toLowerCase());
+
+        ItemStack stack = input.createItemStack(1);
+
+        QualityComponent.applyQuality(stack, quality);
+        int max = stack.getMaxDamage();
+        if (max > 0) {
+            int remaining = Math.max(1, (int) Math.round(max * (durability / 100.0)));
+            remaining = Math.min(remaining, max);
+            stack.setDamageValue(max - remaining);
+        }
+
+        if (withEnchant) {
+            int level = IntegerArgumentType.getInteger(ctx, "level");
+            Holder.Reference<Enchantment> ench = ResourceArgument.getEnchantment(ctx, "enchantment");
+            int cap = QualityComponent.enchantCap(quality);
+            if (level > cap) {
+                throw ERROR_ENCHANT_CAP.create(level, cap == Integer.MAX_VALUE ? "unlimited" : cap);
+            }
+            stack.enchant(ench, level);
+        }
+
+        if (!player.getInventory().add(stack)) {
+            player.drop(stack, false);
+        }
+        final int q = quality;
+        final String itemName = stack.getHoverName().getString();
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Created " + itemName
+                + " [" + QualityComponent.tierName(q) + ", " + durability + "% durability]"), false);
+        return 1;
+    }
+
+    private static int parseQuality(String s) throws CommandSyntaxException {
+        return switch (s) {
+            case "poor" -> QualityComponent.POOR;
+            case "so-so", "soso" -> QualityComponent.SO_SO;
+            case "normal" -> QualityComponent.NORMAL;
+            case "excellent" -> QualityComponent.EXCELLENT;
+            case "superior" -> QualityComponent.SUPERIOR;
+            case "corrupted" -> QualityComponent.CORRUPTED;
+            default -> throw ERROR_QUALITY.create(s);
+        };
     }
 
     public static void collectDescendants(SkillNode[] all, String rootId, List<String> out) {

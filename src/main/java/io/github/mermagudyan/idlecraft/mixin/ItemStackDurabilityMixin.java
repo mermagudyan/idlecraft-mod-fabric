@@ -21,6 +21,27 @@ public abstract class ItemStackDurabilityMixin {
         if (IDLECRAFT_REENTER.get()) return;
         if (entity == null) return;
 
+        ItemStack self = (ItemStack) (Object) this;
+
+        // Quality-based random break: on block break / mob kill a quality item may shatter.
+        if (amount > 0 && !entity.level().isClientSide()
+                && io.github.mermagudyan.idlecraft.common.QualityComponent.isEligible(self)) {
+            int quality = io.github.mermagudyan.idlecraft.common.QualityComponent.getQuality(self);
+            double chance = io.github.mermagudyan.idlecraft.common.QualityComponent.breakChance(quality);
+            if (chance > 0.0 && entity.getRandom().nextDouble() < chance) {
+                int destroy = self.getMaxDamage() - self.getDamageValue();
+                if (destroy < 1) destroy = 1;
+                IDLECRAFT_REENTER.set(true);
+                try {
+                    self.hurtAndBreak(destroy, entity, slot);
+                } finally {
+                    IDLECRAFT_REENTER.set(false);
+                }
+                ci.cancel();
+                return;
+            }
+        }
+
         boolean durabilityUnlocked;
         if (entity.level().isClientSide()) {
             durabilityUnlocked = ClientState.getUnlockedNodes().contains("durability");

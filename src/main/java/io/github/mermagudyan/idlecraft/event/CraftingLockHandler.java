@@ -35,6 +35,15 @@ public class CraftingLockHandler {
             if (isWoodenTool(result)) {
                 if (isUnlocked(player, "wooden_tools")) return false;
             } else if (isUnlocked(player, "crafting_table_unlock")) {
+                if (result.getItem() == Items.TORCH && !isUnlocked(player, "light_up")) {
+                    sendMessage(player, player.level().isClientSide());
+                    return true;
+                }
+                if ((result.getItem() == Items.CHEST || result.getItem() == Items.TRAPPED_CHEST)
+                        && !isUnlocked(player, "guardian")) {
+                    sendMessage(player, player.level().isClientSide());
+                    return true;
+                }
                 return false;
             }
             sendMessage(player, player.level().isClientSide());
@@ -52,6 +61,13 @@ public class CraftingLockHandler {
         if (gridSize == TABLE_GRID) {
             if (isWoodenTool(result)) {
                 return !isUnlocked(player, "wooden_tools");
+            }
+            if (result.getItem() == Items.TORCH && !isUnlocked(player, "light_up")) {
+                return true;
+            }
+            if ((result.getItem() == Items.CHEST || result.getItem() == Items.TRAPPED_CHEST)
+                    && !isUnlocked(player, "guardian")) {
+                return true;
             }
             return !isUnlocked(player, "crafting_table_unlock");
         }

@@ -7,7 +7,9 @@
   "client": [
     "AdvancementsScreenMixin",
     "CraftingResultSlotMixin",
-    "BlockBreakClientMixin"
+    "BlockBreakClientMixin",
+    "ContainerScreenQualityMixin",
+    "CraftingQualityHintMixin"
   ],
   "injectors": {
     "defaultRequire": 1

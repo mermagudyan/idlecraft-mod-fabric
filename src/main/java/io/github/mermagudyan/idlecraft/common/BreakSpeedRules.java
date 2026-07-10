@@ -48,6 +48,10 @@ public final class BreakSpeedRules {
             return 0.0f;
         }
 
+        if (isDecorativeStoneBlock(state) && isUnlocked(player, "decorative")) {
+            return baseSpeed / 2.0f;
+        }
+
         if (hardness >= 1.5f && !isTool) {
             return 0.0f;
         }
@@ -62,7 +66,7 @@ public final class BreakSpeedRules {
             }
         }
 
-        return baseSpeed;
+        return baseSpeed / 4.0f;
     }
 
     public static boolean isUnlocked(Player player, String nodeId) {
@@ -88,6 +92,15 @@ public final class BreakSpeedRules {
     public static boolean isCoalOreBlock(BlockState state) {
         return state.is(Blocks.COAL_ORE)
                 || state.is(Blocks.DEEPSLATE_COAL_ORE);
+    }
+
+    public static boolean isDecorativeStoneBlock(BlockState state) {
+        return state.is(Blocks.GRANITE)
+                || state.is(Blocks.POLISHED_GRANITE)
+                || state.is(Blocks.ANDESITE)
+                || state.is(Blocks.POLISHED_ANDESITE)
+                || state.is(Blocks.DIORITE)
+                || state.is(Blocks.POLISHED_DIORITE);
     }
 
     public static boolean isDirtLikeBlock(BlockState state) {

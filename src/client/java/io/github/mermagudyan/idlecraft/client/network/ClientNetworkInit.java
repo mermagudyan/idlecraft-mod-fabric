@@ -8,6 +8,7 @@ import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import io.github.mermagudyan.idlecraft.network.SacrificeStatePayload;
 import io.github.mermagudyan.idlecraft.network.DebugStatePayload;
+import io.github.mermagudyan.idlecraft.network.RepairStatePayload;
 import io.github.mermagudyan.idlecraft.network.ClearConfirmPayload;
 import io.github.mermagudyan.idlecraft.network.StructureBlockedPayload;
 import io.github.mermagudyan.idlecraft.network.StructureRegionPayload;
@@ -32,6 +33,11 @@ public class ClientNetworkInit implements ClientModInitializer {
 
         ClientPlayNetworking.registerGlobalReceiver(DebugStatePayload.TYPE,
                 (payload, ctx) -> ctx.client().execute(() -> ClientState.setDebug(payload.debug()))
+        );
+
+        ClientPlayNetworking.registerGlobalReceiver(RepairStatePayload.TYPE,
+                (payload, ctx) -> ctx.client().execute(() ->
+                        ClientState.setRepairState(payload.nodeId(), payload.startMs(), payload.succeeded()))
         );
 
         ClientPlayNetworking.registerGlobalReceiver(ClearConfirmPayload.TYPE,

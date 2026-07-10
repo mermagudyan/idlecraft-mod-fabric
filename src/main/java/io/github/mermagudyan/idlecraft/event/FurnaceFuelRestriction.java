@@ -37,6 +37,7 @@ public class FurnaceFuelRestriction {
     public static boolean isFuelAllowed(AbstractFurnaceMenu menu, Level level, ItemStack stack) {
         boolean firstSteps = false;
         boolean enhanced = false;
+        boolean filigree = false;
         MinecraftServer server = level.getServer();
         if (server != null) {
             for (ServerPlayer p : server.getPlayerList().getPlayers()) {
@@ -44,14 +45,16 @@ public class FurnaceFuelRestriction {
                     List<String> unlocked = PlayerData.getServer(server).getUnlockedNodes(p.getUUID());
                     firstSteps = unlocked.contains("first_steps");
                     enhanced = unlocked.contains("enhanced_smelting");
+                    filigree = unlocked.contains("filigree");
                     break;
                 }
             }
         } else {
             firstSteps = ClientState.getUnlockedNodes().contains("first_steps");
             enhanced = ClientState.getUnlockedNodes().contains("enhanced_smelting");
+            filigree = ClientState.getUnlockedNodes().contains("filigree");
         }
-        return allowed(stack, firstSteps, enhanced);
+        return allowed(stack, firstSteps, enhanced, filigree);
     }
 
     public static boolean isFuelAllowedForBlockEntity(AbstractFurnaceBlockEntity blockEntity, Level level, ItemStack stack) {
@@ -62,21 +65,23 @@ public class FurnaceFuelRestriction {
                     try {
                         if (CONTAINER_FIELD.get(menu) == blockEntity) {
                             List<String> unlocked = PlayerData.getServer(server).getUnlockedNodes(p.getUUID());
-                            return allowed(stack, unlocked.contains("first_steps"), unlocked.contains("enhanced_smelting"));
+                            return allowed(stack, unlocked.contains("first_steps"), unlocked.contains("enhanced_smelting"), unlocked.contains("filigree"));
                         }
                     } catch (Exception ignored) {
                     }
                 }
             }
-            return allowed(stack, false, false);
+            return allowed(stack, false, false, false);
         }
         boolean firstSteps = ClientState.getUnlockedNodes().contains("first_steps");
         boolean enhanced = ClientState.getUnlockedNodes().contains("enhanced_smelting");
-        return allowed(stack, firstSteps, enhanced);
+        boolean filigree = ClientState.getUnlockedNodes().contains("filigree");
+        return allowed(stack, firstSteps, enhanced, filigree);
     }
 
-    public static boolean allowed(ItemStack stack, boolean firstSteps, boolean enhanced) {
+    public static boolean allowed(ItemStack stack, boolean firstSteps, boolean enhanced, boolean filigree) {
         if (stack.is(Items.STICK)) return firstSteps;
+        if (stack.is(Items.COAL) || stack.is(Items.CHARCOAL)) return filigree;
         if (!enhanced) return false;
         return getOperations(stack) > 0.0;
     }
@@ -84,6 +89,8 @@ public class FurnaceFuelRestriction {
     public static double getOperations(ItemStack stack) {
         Item item = stack.getItem();
         if (item == Items.STICK) return 0.5;
+        if (item == Items.COAL) return 8.0;
+        if (item == Items.CHARCOAL) return 8.0 / 1.5;
         if (stack.is(ItemTags.PLANKS)) return 1.0;
         if (stack.is(ItemTags.WOODEN_SLABS)) return 0.75;
         if (stack.is(ItemTags.WOODEN_BUTTONS)) return 0.5;

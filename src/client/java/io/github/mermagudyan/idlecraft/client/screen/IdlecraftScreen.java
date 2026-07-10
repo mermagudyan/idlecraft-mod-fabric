@@ -18,6 +18,7 @@ import io.github.mermagudyan.idlecraft.client.debug.DebugState;
 import io.github.mermagudyan.idlecraft.network.ClientState;
 import net.minecraft.world.item.Item;
 import io.github.mermagudyan.idlecraft.network.NodePurchasePayload;
+import io.github.mermagudyan.idlecraft.network.RepairTryPayload;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 import java.util.List;
 import java.util.ArrayList;
@@ -263,6 +264,26 @@ public class IdlecraftScreen extends Screen {
         if ("burning_knowledge".equals(n.id)) {
             return ClientState.getProgress("furnace_takes") >= 5;
         }
+        if ("smoking_rack".equals(n.id)) {
+            return ClientState.getUnlockedNodes().contains("stone_tools");
+        }
+        if ("cave_explorer".equals(n.id)) {
+            return ClientState.getProgress("cave_dark_damage") >= 1;
+        }
+        if ("light_up".equals(n.id)) {
+            return ClientState.getProgress("cave_hunger_damage") >= 1;
+        }
+        if ("guardian".equals(n.id)) {
+            boolean stone = ClientState.getUnlockedNodes().contains("stone_1");
+            boolean day = ClientState.getProgress("days_survived") >= 1;
+            return stone && day;
+        }
+        if ("cave_master".equals(n.id)) {
+            return ClientState.getUnlockedNodes().contains("decorative");
+        }
+        if ("good_caster".equals(n.id)) {
+            return ClientState.getProgress("crafted_quality") >= 1;
+        }
         return true;
     }
 
@@ -336,12 +357,30 @@ public class IdlecraftScreen extends Screen {
             if (needsCameraAnim(n)) startCameraAnim(n.x, n.y);
             pressedNode = n;
             holdProgress = 0.0f;
-        } else if (!n.sacrifices.isEmpty()) {
-            pendingSacrificeNode = n;
-            if (needsCameraAnim(n)) startCameraAnim(n.x, n.y);
         } else {
-            if (needsCameraAnim(n)) startCameraAnim(n.x, n.y);
+            // Condition not met or sacrifice incomplete: always play the centring animation.
+            startCameraAnim(n.x, n.y);
+            if (!n.sacrifices.isEmpty()) {
+                if (n.repairSeconds > 0 && isSacrificeComplete(n) && !ClientState.isRepairSucceeded(n.id)) {
+                    long start = ClientState.getRepairStart(n.id);
+                    long elapsed = (System.currentTimeMillis() - start) / 1000L;
+                    if (start > 0 && elapsed >= n.repairSeconds) {
+                        ClientPlayNetworking.send(new RepairTryPayload(n.id));
+                    }
+                    return;
+                }
+                pendingSacrificeNode = n;
+            }
         }
+    }
+
+    private boolean isSacrificeComplete(SkillNode n) {
+        int[] prog = ClientState.getSacrificeProgress(n.id);
+        for (int i = 0; i < n.sacrifices.size(); i++) {
+            int c = i < prog.length ? prog[i] : 0;
+            if (c < n.sacrifices.get(i).amount()) return false;
+        }
+        return true;
     }
 
     private void trySacrifice(SkillNode n) {
@@ -633,6 +672,24 @@ public class IdlecraftScreen extends Screen {
         if (n.unlocked) return true;
         if (n.id.equals("start")) return true;
 
+        if (n.single) {
+            if ("light_up".equals(n.id)) {
+                return ClientState.getProgress("cave_hunger_damage") >= 1;
+            }
+            if ("guardian".equals(n.id)) {
+                return ClientState.getUnlockedNodes().contains("stone_1")
+                        && ClientState.getProgress("days_survived") >= 1;
+            }
+            if ("copper_start".equals(n.id)) {
+                return isStoneBranchComplete();
+            }
+            return false;
+        }
+
+        if (SkillNodeRegistry.BRANCH_COPPER.equals(n.branch)) {
+            if (!isStoneBranchComplete()) return false;
+        }
+
         if (n.id.equals("axe_node")) {
             SkillNode a = nodes.get("crafting_table_unlock");
             SkillNode b = nodes.get("wooden_tools");
@@ -663,11 +720,26 @@ public class IdlecraftScreen extends Screen {
             return parent != null && parent.unlocked;
         }
 
+        if (n.id.equals("cave_master")) {
+            SkillNode parent = nodes.get(n.parentId);
+            SkillNode deco = nodes.get("decorative");
+            return parent != null && parent.unlocked && deco != null && deco.unlocked;
+        }
+
         if (n.parentId == null) return false;
 
         SkillNode parent = nodes.get(n.parentId);
         if (parent == null || !parent.unlocked) {
             return false;
+        }
+        return true;
+    }
+
+    private boolean isStoneBranchComplete() {
+        for (SkillNode n : SkillNodeRegistry.getAll()) {
+            if (SkillNodeRegistry.BRANCH_STONE.equals(n.branch)) {
+                if (!n.unlocked && !isExcluded(n)) return false;
+            }
         }
         return true;
     }
@@ -680,6 +752,7 @@ public class IdlecraftScreen extends Screen {
 
     private void renderConnections(GuiGraphicsExtractor guiGraphics) {
         for (SkillNode n : nodes.values()) {
+            if (n.single) continue;
             if (n.parentId == null) continue;
             SkillNode p = nodes.get(n.parentId);
             if (p == null) continue;
@@ -868,6 +941,32 @@ public class IdlecraftScreen extends Screen {
                 int takes = ClientState.getProgress("furnace_takes");
                 condLines.add("Take items from the furnace output (" + takes + "/5)");
                 allCondMet = (takes >= 5);
+            } else if ("smoking_rack".equals(n.id)) {
+                boolean m = ClientState.getUnlockedNodes().contains("stone_tools");
+                condLines.add("Unlock Stone Tools" + (m ? " (Done)" : ""));
+                allCondMet = m;
+            } else if ("cave_explorer".equals(n.id)) {
+                int p = ClientState.getProgress("cave_dark_damage");
+                condLines.add("Take damage from the unknown (" + p + "/1)");
+                allCondMet = (p >= 1);
+            } else if ("light_up".equals(n.id)) {
+                int p = ClientState.getProgress("cave_hunger_damage");
+                condLines.add("Take damage from Underground Starvation (" + p + "/1)");
+                allCondMet = (p >= 1);
+            } else if ("guardian".equals(n.id)) {
+                boolean stone = ClientState.getUnlockedNodes().contains("stone_1");
+                int day = ClientState.getProgress("days_survived");
+                condLines.add("Unlock Miner I" + (stone ? " (Done)" : ""));
+                condLines.add("Survive 1 day (" + day + "/1)");
+                allCondMet = stone && (day >= 1);
+            } else if ("cave_master".equals(n.id)) {
+                boolean m = ClientState.getUnlockedNodes().contains("decorative");
+                condLines.add("Complete Decorative Diversity" + (m ? " (Done)" : ""));
+                allCondMet = m;
+            } else if ("good_caster".equals(n.id)) {
+                int p = ClientState.getProgress("crafted_quality");
+                condLines.add("Craft an item of any quality (" + p + "/1)");
+                allCondMet = (p >= 1);
             } else {
                 condLines.add(n.conditionText);
                 allCondMet = true;
@@ -882,7 +981,9 @@ public class IdlecraftScreen extends Screen {
                 SacrificeRequirement r = n.sacrifices.get(i);
                 int cur = i < prog.length ? prog[i] : 0;
                 if (cur < r.amount()) allSacMet = false;
-                String label = r.anyWood() ? "any wood" : r.item().getName(new ItemStack(r.item())).getString();
+                String label = r.anyWood() ? "any wood"
+                        : r.anyPlanks() ? "any planks"
+                        : r.item().getName(new ItemStack(r.item())).getString();
                 sacLines.add(cur + "/" + r.amount() + "x " + label);
             }
         }
@@ -894,6 +995,26 @@ public class IdlecraftScreen extends Screen {
                 int m = secs / 60;
                 int s = secs % 60;
                 lockStr = "Branch locked: " + m + "m " + String.format("%02d", s) + "s";
+            }
+        }
+
+        String repairStr = null;
+        if (n.repairSeconds > 0 && !n.unlocked) {
+            if (isSacrificeComplete(n)) {
+                if (ClientState.isRepairSucceeded(n.id)) {
+                    repairStr = "Repair complete - HOLD to unlock";
+                } else {
+                    long start = ClientState.getRepairStart(n.id);
+                    if (start <= 0) {
+                        repairStr = "Repair not started";
+                    } else {
+                        long elapsed = (System.currentTimeMillis() - start) / 1000L;
+                        long remain = Math.max(0L, (long) n.repairSeconds - elapsed);
+                        repairStr = remain > 0
+                                ? "Repairing... " + remain + "s"
+                                : "Click to attempt repair (90% chance)";
+                    }
+                }
             }
         }
 
@@ -939,10 +1060,11 @@ public class IdlecraftScreen extends Screen {
         for (String l : grantsWrap) contentW = Math.max(contentW, this.font.width(l));
         for (String l : unlocksWrap) contentW = Math.max(contentW, this.font.width(l));
         if (lockStr != null) contentW = Math.max(contentW, this.font.width(lockStr));
+        if (repairStr != null) contentW = Math.max(contentW, this.font.width(repairStr));
         contentW = Math.min(contentW, MAX_W);
 
         int w = contentW + pad * 2;
-        int baseLines = 1 + descWrap.size() + 1 + condVisual + sacVisual + (lockStr != null ? 1 : 0) + 1;
+        int baseLines = 1 + descWrap.size() + 1 + condVisual + sacVisual + (lockStr != null ? 1 : 0) + (repairStr != null ? 1 : 0) + 1;
         int extraLines = grantsWrap.size() + unlocksWrap.size();
         float animatedExtraLines = extraLines * expandProgress;
         int h = (int)(lineH * (baseLines + animatedExtraLines) + pad * 2);
@@ -1020,6 +1142,10 @@ public class IdlecraftScreen extends Screen {
 
         if (lockStr != null) {
             guiGraphics.text(this.font, Component.literal(lockStr), x + pad, textY, 0xFFFFAA00, true);
+            textY += lineH;
+        }
+        if (repairStr != null) {
+            guiGraphics.text(this.font, Component.literal(repairStr), x + pad, textY, 0xFF55FFFF, true);
             textY += lineH;
         }
         guiGraphics.text(this.font, Component.literal(pointsStr), x + pad, textY, 0xFF55FFFF, true);

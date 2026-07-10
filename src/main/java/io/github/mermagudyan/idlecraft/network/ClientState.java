@@ -11,12 +11,26 @@ public class ClientState {
     private static Map<String, Integer> conditionProgress = new HashMap<>();
     private static Map<String, int[]> sacrificeProgress = new HashMap<>();
     private static boolean debug = false;
+    private static Map<String, Long> repairStart = new HashMap<>();
+    private static Map<String, Boolean> repairSucceeded = new HashMap<>();
 
     public static int getPoints() { return points; }
     public static void setPoints(int p) { points = p; }
 
     public static boolean isDebug() { return debug; }
     public static void setDebug(boolean d) { debug = d; }
+
+    public static long getRepairStart(String nodeId) { return repairStart.getOrDefault(nodeId, 0L); }
+    public static boolean isRepairSucceeded(String nodeId) { return repairSucceeded.getOrDefault(nodeId, false); }
+    public static void setRepairState(String nodeId, long start, boolean succeeded) {
+        repairStart.put(nodeId, start);
+        repairSucceeded.put(nodeId, succeeded);
+    }
+
+    private static int selectedQuality = 0;
+
+    public static int getSelectedQuality() { return selectedQuality; }
+    public static void setSelectedQuality(int q) { selectedQuality = q; }
 
     public static List<String> getUnlockedNodes() { return new ArrayList<>(unlockedNodes); }
     public static void setUnlockedNodes(List<String> nodes) { unlockedNodes = new ArrayList<>(nodes); }

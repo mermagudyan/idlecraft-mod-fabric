@@ -1,6 +1,7 @@
 package io.github.mermagudyan.idlecraft.event;
 
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
+import io.github.mermagudyan.idlecraft.data.PlayerData;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
 import net.minecraft.server.MinecraftServer;
@@ -18,6 +19,10 @@ public class PlayerJoinHandler {
     public static void register() {
         ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {
             UUID id = handler.getPlayer().getUUID();
+            PlayerData data = PlayerData.getServer(server);
+            if (!data.hasDebug(id)) {
+                data.setDebug(id, false);
+            }
             pendingSyncs.put(id, 40);
         });
 
@@ -37,6 +42,7 @@ public class PlayerJoinHandler {
                         IdlecraftNetworking.syncNodesToClient(player);
                         IdlecraftNetworking.syncSacrificeState(player);
                         IdlecraftNetworking.syncDebugToClient(player);
+                        IdlecraftNetworking.syncRepairState(player);
                     }
                     it.remove();
                 } else {

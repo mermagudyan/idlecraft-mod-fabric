@@ -26,7 +26,7 @@ public class SeedDropMixin {
         List<ItemStack> original = cir.getReturnValue();
         if (original.isEmpty()) return;
 
-        boolean isHoe = tool.is(ItemTags.HOES);
+        boolean isHoe = tool != null && tool.is(ItemTags.HOES);
         if (isHoe) return;
 
         List<ItemStack> filtered = new ArrayList<>();

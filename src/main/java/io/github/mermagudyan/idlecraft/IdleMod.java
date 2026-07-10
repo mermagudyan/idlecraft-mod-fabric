@@ -10,6 +10,7 @@ import io.github.mermagudyan.idlecraft.event.StickToolHandler;
 import io.github.mermagudyan.idlecraft.event.VillageVisitHandler;
 import io.github.mermagudyan.idlecraft.event.FurnaceUsageTracker;
 import io.github.mermagudyan.idlecraft.event.PlayerPlacedTracker;
+import io.github.mermagudyan.idlecraft.event.CaveEffectHandler;
 
 public class IdleMod implements ModInitializer {
     public static final String MOD_ID = "idlecraft";
@@ -24,8 +25,10 @@ public class IdleMod implements ModInitializer {
         PlayerPlacedTracker.register();
         VillageVisitHandler.register();
         FurnaceUsageTracker.register();
+        CaveEffectHandler.register();
+        io.github.mermagudyan.idlecraft.common.QualityComponent.init();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
-                IdlecraftCommand.register(dispatcher));
+                IdlecraftCommand.register(dispatcher, registryAccess));
         LOGGER.info("Initialized.");
     }
 }

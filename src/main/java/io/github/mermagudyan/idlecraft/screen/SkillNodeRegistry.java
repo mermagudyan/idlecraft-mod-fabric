@@ -14,12 +14,14 @@ public class SkillNodeRegistry {
     public static final String BRANCH_MINING = "Mining";
     public static final String BRANCH_TECH = "Tech";
     public static final String BRANCH_STONE = "Stone Knowledge";
+    public static final String BRANCH_COPPER = "Copper Vengeance";
 
     public static SkillNode[] getAll() {
         List<SkillNode> all = new ArrayList<>();
         all.addAll(simple());
         all.addAll(medium());
         all.addAll(complex());
+        all.addAll(copper());
         return all.toArray(new SkillNode[0]);
     }
 
@@ -265,6 +267,178 @@ public class SkillNodeRegistry {
                 null,
                 List.of(new SacrificeRequirement(Items.BREAD, 3)), false,
                 BRANCH_TUTORIAL
+        ));
+
+        list.add(new SkillNode(
+                "filigree", 550, 840, 60,
+                "Filigree Processing",
+                "Sacrifice 7 coal to learn charcoal craft.",
+                "After upgrade, any log can be smelted into charcoal in a furnace. Charcoal burns faster (1.5x) than coal and can be used as furnace fuel; before the upgrade charcoal cannot be smelted or used.",
+                0, Items.CHARCOAL, "coal_knowledge",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(new SacrificeRequirement(Items.COAL, 7)), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "smoking_rack", 750, 840, 60,
+                "Smokehouse",
+                "Unlock Stone Tools, then sacrifice 5 coal, 5 charcoal and 9 stone.",
+                "After upgrade, the vanilla Smoker gets special logic: it only cooks meat if you have ever held meat in your inventory; otherwise the progress bar will not advance. Per-player - if one player has never held meat, others are unaffected.",
+                0, Items.SMOKER, "coal_knowledge",
+                "custom", "Unlock Stone Tools",
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.COAL, 5),
+                        new SacrificeRequirement(Items.CHARCOAL, 5),
+                        new SacrificeRequirement(Items.COBBLESTONE, 9)
+                ), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "decorative", -150, 420, 60,
+                "Decorative Diversity",
+                "Sacrifice 1 stone pickaxe and 10 wood (any).",
+                "After upgrade, granite, andesite and diorite can be mined with any tool.",
+                0, Items.GRANITE, "cobblestone",
+                null, null,
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.STONE_PICKAXE, 1),
+                        new SacrificeRequirement(Items.OAK_LOG, 10, true)
+                ), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "cave_explorer", -150, 640, 60,
+                "Cave Explorer",
+                "Take damage from the unknown and sacrifice 16 cobblestone.",
+                "After upgrade, below y=60 in caves you may descend to y=15 (and y=15 normally; normally the limit is y=30 unless in a cave, where it starts at y=60). If not upgraded, a darkness effect appears below the limit, infinitely extended from 0s to 1s, hitting the player 2 hearts until they leave the forbidden zone.",
+                0, Items.SPYGLASS, "cobblestone",
+                "custom", "Take damage from the unknown",
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(new SacrificeRequirement(Items.COBBLESTONE, 16)), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "cave_master", -450, 640, 60,
+                "Skilled Cave Explorer",
+                "Sacrifice 10 torches and 10 copper.",
+                "After upgrade you may descend to y=-1; below that the same effect applies again.",
+                0, Items.LANTERN, "cave_explorer",
+                "custom", "Complete Decorative Diversity",
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.TORCH, 10),
+                        new SacrificeRequirement(Items.COPPER_ORE, 10)
+                ), false,
+                BRANCH_STONE
+        ));
+
+        list.add(new SkillNode(
+                "light_up", 220, -520, 60,
+                "Time to Light Up",
+                "Take damage from Underground Starvation, then sacrifice 1 coal, 1 stick, 1 string.",
+                "After upgrade, a torch can be crafted at the crafting tree (coal receives its first recipe).",
+                0, Items.TORCH, null,
+                "custom", "Take damage from Underground Starvation",
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.COAL, 1),
+                        new SacrificeRequirement(Items.STICK, 1),
+                        new SacrificeRequirement(Items.STRING, 1)
+                ), false,
+                BRANCH_TUTORIAL,
+                true, 0
+        ));
+
+        list.add(new SkillNode(
+                "guardian", 260, -200, 60,
+                "Guardian",
+                "Unlock Miner I and survive 1 day, then sacrifice 8 planks (any).",
+                "After upgrade, a chest can be crafted at the crafting table, and chests can be opened (previously no chest could be opened, even a trapped chest).",
+                0, Items.CHEST, null,
+                "custom", "Unlock Miner I and survive 1 day",
+                SkillNodeCategory.SIMPLE,
+                null,
+                List.of(new SacrificeRequirement(Items.OAK_PLANKS, 8, false, true)), false,
+                BRANCH_TUTORIAL,
+                true, 0
+        ));
+
+        return list;
+    }
+
+    public static List<SkillNode> copper() {
+        List<SkillNode> list = new ArrayList<>();
+
+        list.add(new SkillNode(
+                "copper_start", -1600, 0, 80,
+                "Dawn of the Copper Age",
+                "The start of the Copper Vengeance branch.",
+                "Sacrifice 1 stone pickaxe, then wait 30s for the node to repair, then click (not hold) with a 90% chance to open it; if lucky, hold to unlock. Appears after the whole Stone Knowledge branch is unlocked.",
+                0, Items.COPPER_ORE, null,
+                null, null,
+                SkillNodeCategory.COMPLEX,
+                null,
+                List.of(new SacrificeRequirement(Items.STONE_PICKAXE, 1)), false,
+                BRANCH_COPPER,
+                true, 30
+        ));
+
+        list.add(new SkillNode(
+                "copper_smelting", -1700, -250, 60,
+                "Copper Smelting",
+                "Sacrifice 11 copper ore.",
+                "After upgrade, copper ore can be smelted into copper ingots (before the upgrade the progress bar will not advance).",
+                0, Items.COPPER_INGOT, "copper_start",
+                null, null,
+                SkillNodeCategory.COMPLEX,
+                null,
+                List.of(new SacrificeRequirement(Items.COPPER_ORE, 11)), false,
+                BRANCH_COPPER
+        ));
+
+        list.add(new SkillNode(
+                "bad_caster", -1600, -450, 60,
+                "Poor Caster",
+                "Sacrifice 11 copper ingots.",
+                "After upgrade, all poor-quality copper tools can be crafted at the crafting table (new mechanic for copper, iron, gold, diamond, netherite tools and armour: default 'Poor' quality).",
+                0, Items.COPPER_INGOT, "copper_smelting",
+                null, null,
+                SkillNodeCategory.COMPLEX,
+                null,
+                List.of(new SacrificeRequirement(Items.COPPER_INGOT, 11)), false,
+                BRANCH_COPPER
+        ));
+
+        list.add(new SkillNode(
+                "good_caster", -1600, -650, 60,
+                "Good Caster",
+                "Craft your first quality item, then sacrifice one of each copper tool.",
+                "After upgrade, besides poor quality you can craft 'So-so' and 'Normal' quality.",
+                0, Items.COPPER_PICKAXE, "bad_caster",
+                "custom", "Craft an item of any quality",
+                SkillNodeCategory.COMPLEX,
+                null,
+                List.of(
+                        new SacrificeRequirement(Items.COPPER_PICKAXE, 1),
+                        new SacrificeRequirement(Items.COPPER_AXE, 1),
+                        new SacrificeRequirement(Items.COPPER_SHOVEL, 1),
+                        new SacrificeRequirement(Items.COPPER_HOE, 1),
+                        new SacrificeRequirement(Items.COPPER_SWORD, 1)
+                ), false,
+                BRANCH_COPPER
         ));
 
         return list;
