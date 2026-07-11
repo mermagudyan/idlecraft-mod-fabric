@@ -23,7 +23,7 @@ public abstract class ItemStackDurabilityMixin {
 
         ItemStack self = (ItemStack) (Object) this;
 
-        // Quality-based random break: on block break / mob kill a quality item may shatter.
+        
         if (amount > 0 && !entity.level().isClientSide()
                 && io.github.mermagudyan.idlecraft.common.QualityComponent.isEligible(self)) {
             int quality = io.github.mermagudyan.idlecraft.common.QualityComponent.getQuality(self);

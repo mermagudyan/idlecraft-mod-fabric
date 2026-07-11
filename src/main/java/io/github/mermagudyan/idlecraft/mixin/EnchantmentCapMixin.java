@@ -25,6 +25,11 @@ public abstract class EnchantmentCapMixin {
         if (!QualityComponent.isEligible(stack)) return;
 
         int quality = QualityComponent.getQuality(stack);
+        
+        if (quality == QualityComponent.CORRUPTED) {
+            ci.cancel();
+            return;
+        }
         int cap = QualityComponent.enchantCap(quality);
         if (cap == Integer.MAX_VALUE) return;
 

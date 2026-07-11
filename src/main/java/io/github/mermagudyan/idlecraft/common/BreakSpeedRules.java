@@ -17,11 +17,8 @@ public final class BreakSpeedRules {
     private BreakSpeedRules() {
     }
 
-    /**
-     * Applies the idlecraft break-speed gating (stick-on-wood, node unlocks, tool requirement
-     * and non-tool slowdowns) to the given base destroy speed. Returns the modified speed.
-     * A value of {@code 0.0f} means the block cannot be broken.
-     */
+    
+
     public static float apply(Player player, BlockState state, Level level, float baseSpeed) {
         boolean isSurvival = !player.isCreative() && !player.isSpectator();
         if (!isSurvival) {

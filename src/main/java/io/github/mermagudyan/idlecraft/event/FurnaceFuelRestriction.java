@@ -28,7 +28,6 @@ public class FurnaceFuelRestriction {
         CONTAINER_FIELD = f;
     }
 
-
     private static final Item[] WOODEN_TOOLS = {
             Items.WOODEN_SWORD, Items.WOODEN_PICKAXE, Items.WOODEN_AXE,
             Items.WOODEN_SHOVEL, Items.WOODEN_HOE
@@ -71,7 +70,9 @@ public class FurnaceFuelRestriction {
                     }
                 }
             }
-            return allowed(stack, false, false, false);
+            
+            
+            return true;
         }
         boolean firstSteps = ClientState.getUnlockedNodes().contains("first_steps");
         boolean enhanced = ClientState.getUnlockedNodes().contains("enhanced_smelting");

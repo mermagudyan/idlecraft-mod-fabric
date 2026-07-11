@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.event;
 
+import io.github.mermagudyan.idlecraft.common.QualityComponent;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.ClientState;
 import net.minecraft.server.MinecraftServer;
@@ -23,56 +24,15 @@ public class CraftingLockHandler {
     };
 
     public static boolean isCraftingLocked(Player player, int gridSize, ItemStack result) {
-        if (result.isEmpty()) return false;
-
-        if (gridSize == INVENTORY_GRID) {
-            if (isCraftingTableAllowed(player, result)) return false;
-            sendMessage(player, player.level().isClientSide());
-            return true;
-        }
-
-        if (gridSize == TABLE_GRID) {
-            if (isWoodenTool(result)) {
-                if (isUnlocked(player, "wooden_tools")) return false;
-            } else if (isUnlocked(player, "crafting_table_unlock")) {
-                if (result.getItem() == Items.TORCH && !isUnlocked(player, "light_up")) {
-                    sendMessage(player, player.level().isClientSide());
-                    return true;
-                }
-                if ((result.getItem() == Items.CHEST || result.getItem() == Items.TRAPPED_CHEST)
-                        && !isUnlocked(player, "guardian")) {
-                    sendMessage(player, player.level().isClientSide());
-                    return true;
-                }
-                return false;
-            }
-            sendMessage(player, player.level().isClientSide());
-            return true;
-        }
-
-        return false;
+        
+        
+        if (!QualityComponent.isEligible(result)) return false;
+        return !isUnlocked(player, "crafting_table_unlock");
     }
 
     public static boolean isResultSlotLocked(Player player, int gridSize, ItemStack result) {
-        if (gridSize == INVENTORY_GRID) {
-            return !isCraftingTableAllowed(player, result);
-        }
-
-        if (gridSize == TABLE_GRID) {
-            if (isWoodenTool(result)) {
-                return !isUnlocked(player, "wooden_tools");
-            }
-            if (result.getItem() == Items.TORCH && !isUnlocked(player, "light_up")) {
-                return true;
-            }
-            if ((result.getItem() == Items.CHEST || result.getItem() == Items.TRAPPED_CHEST)
-                    && !isUnlocked(player, "guardian")) {
-                return true;
-            }
-            return !isUnlocked(player, "crafting_table_unlock");
-        }
-
-        return false;
+        if (!QualityComponent.isEligible(result)) return false;
+        return !isUnlocked(player, "crafting_table_unlock");
     }
 
     private static boolean isWoodenTool(ItemStack result) {

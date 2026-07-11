@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [" B ","D#D","###"],
+  "key": {"B": {"item": "minecraft:book"}, "D": {"item": "minecraft:diamond"}, "#": {"item": "minecraft:obsidian"}},
+  "result": {"id": "idlecraft:enchanting_table"}
+}

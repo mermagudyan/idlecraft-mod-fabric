@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [" B ","###"],
+  "key": {"B": {"item": "minecraft:blaze_rod"}, "#": {"item": "minecraft:cobblestone"}},
+  "result": {"id": "idlecraft:brewing_stand"}
+}

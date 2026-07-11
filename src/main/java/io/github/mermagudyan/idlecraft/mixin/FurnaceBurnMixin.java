@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
+import io.github.mermagudyan.idlecraft.common.IdlecraftWorkstation;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -16,6 +17,10 @@ public abstract class FurnaceBurnMixin {
     private void idlecraft$scaleBurn(FuelValues fuelValues, ItemStack fuel, CallbackInfoReturnable<Integer> cir) {
         net.minecraft.world.level.Level level =
                 ((BlockEntity) (Object) this).getLevel();
+        
+        if (((BlockEntity) (Object) this).getBlockState().getBlock() instanceof IdlecraftWorkstation) {
+            return;
+        }
         if (!io.github.mermagudyan.idlecraft.event.FurnaceFuelRestriction.isFuelAllowedForBlockEntity(
                 (AbstractFurnaceBlockEntity) (Object) this, level, fuel)) {
             cir.setReturnValue(0);

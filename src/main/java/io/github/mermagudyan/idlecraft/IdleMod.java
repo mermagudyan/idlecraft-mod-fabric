@@ -27,6 +27,9 @@ public class IdleMod implements ModInitializer {
         FurnaceUsageTracker.register();
         CaveEffectHandler.register();
         io.github.mermagudyan.idlecraft.common.QualityComponent.init();
+        io.github.mermagudyan.idlecraft.common.StructureProtection.init();
+        io.github.mermagudyan.idlecraft.block.ModBlocks.init();
+        io.github.mermagudyan.idlecraft.block.ModCreativeTabs.register();
         CommandRegistrationCallback.EVENT.register((dispatcher, registryAccess, environment) ->
                 IdlecraftCommand.register(dispatcher, registryAccess));
         LOGGER.info("Initialized.");

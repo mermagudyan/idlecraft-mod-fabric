@@ -23,11 +23,19 @@ public final class QualityComponent {
                             .persistent(Codec.INT)
                             .build());
 
+    
+    public static final DataComponentType<Integer> CLEANSE_COUNT =
+            Registry.register(BuiltInRegistries.DATA_COMPONENT_TYPE,
+                    Identifier.fromNamespaceAndPath("idlecraft", "cleanse_count"),
+                    DataComponentType.<Integer>builder()
+                            .persistent(Codec.INT)
+                            .build());
+
     private QualityComponent() {
     }
 
     public static void init() {
-        // Touching the class triggers the static field initialiser that registers QUALITY.
+        
     }
 
     public static final int CORRUPTED = -1;
@@ -37,7 +45,7 @@ public final class QualityComponent {
     public static final int EXCELLENT = 15;
     public static final int SUPERIOR = 20;
 
-    // Order of the "real" (non-corrupted) tiers, used for upgrade steps.
+    
     public static final int[] TIERS = { POOR, SO_SO, NORMAL, EXCELLENT, SUPERIOR };
 
     public static final List<Item> COPPER_ITEMS = List.of(
@@ -91,7 +99,7 @@ public final class QualityComponent {
         };
     }
 
-    /** Items with no assigned quality default to Normal. */
+    
     public static int getQuality(ItemStack stack) {
         Integer q = stack.get(QUALITY);
         return q == null ? NORMAL : q;
@@ -115,6 +123,15 @@ public final class QualityComponent {
         return BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath().startsWith("chainmail_");
     }
 
+    
+    public static final List<Item> REPAIR_MATERIALS = List.of(
+            Items.IRON_INGOT, Items.GOLD_INGOT, Items.DIAMOND, Items.NETHERITE_INGOT
+    );
+
+    public static boolean isRepairMaterial(Item item) {
+        return REPAIR_MATERIALS.contains(item);
+    }
+
     public static int randomTier(net.minecraft.util.RandomSource random) {
         double d = random.nextDouble();
         if (d < 0.40) return POOR;
@@ -124,7 +141,7 @@ public final class QualityComponent {
         return SUPERIOR;
     }
 
-    /** Index of a real tier in {@link #TIERS} (Corrupted counts as below Poor). */
+    
     public static int tierIndex(int level) {
         for (int i = 0; i < TIERS.length; i++) {
             if (TIERS[i] == level) return i;
@@ -132,13 +149,13 @@ public final class QualityComponent {
         return 0;
     }
 
-    /** The base (vanilla) max durability of an item, ignoring any quality scaling already applied. */
+    
     public static int baseMaxDamage(Item item) {
         Integer def = new ItemStack(item).getComponents().get(DataComponents.MAX_DAMAGE);
         return def == null ? 0 : def;
     }
 
-    /** Applies a quality to a stack: sets the component and rescales max durability from the vanilla base. */
+    
     public static void applyQuality(ItemStack stack, int level) {
         stack.set(QUALITY, level);
         int base = baseMaxDamage(stack.getItem());
@@ -149,7 +166,7 @@ public final class QualityComponent {
         }
     }
 
-    /** The item used to repair/forge this item (its crafting material), or null if none. */
+    
     public static Item repairMaterial(ItemStack stack) {
         Repairable rep = stack.get(DataComponents.REPAIRABLE);
         if (rep == null) return null;
@@ -159,7 +176,20 @@ public final class QualityComponent {
         return null;
     }
 
-    /** How many units of the crafting material an item consists of (for grindstone cleansing). */
+    
+
+    public static Item forgeMaterial(ItemStack stack) {
+        if (stack.isEmpty()) return null;
+        String path = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
+        if (path.startsWith("copper_")) return Items.COPPER_INGOT;
+        if (path.startsWith("iron_")) return Items.IRON_INGOT;
+        if (path.startsWith("golden_")) return Items.GOLD_INGOT;
+        if (path.startsWith("diamond_")) return Items.DIAMOND;
+        if (path.startsWith("netherite_")) return Items.NETHERITE_INGOT;
+        return null;
+    }
+
+    
     public static int craftMaterialCount(Item item) {
         String path = BuiltInRegistries.ITEM.getKey(item).getPath();
         if (path.startsWith("netherite_")) return 1;

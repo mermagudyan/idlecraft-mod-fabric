@@ -7,7 +7,9 @@ import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.exceptions.Dynamic2CommandExceptionType;
 import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
+import io.github.mermagudyan.idlecraft.common.ClaimStore;
 import io.github.mermagudyan.idlecraft.common.QualityComponent;
+import io.github.mermagudyan.idlecraft.world.BlockConverter;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
 import io.github.mermagudyan.idlecraft.screen.SkillNode;
@@ -20,10 +22,12 @@ import net.minecraft.commands.arguments.item.ItemArgument;
 import net.minecraft.commands.arguments.item.ItemInput;
 import net.minecraft.core.Holder;
 import net.minecraft.core.registries.Registries;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.enchantment.Enchantment;
+import net.minecraft.world.level.ChunkPos;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -108,6 +112,19 @@ public class IdlecraftCommand {
                                     return builder.buildFuture();
                                 })
                                 .executes(ctx -> clearNode(ctx.getSource(), StringArgumentType.getString(ctx, "node")))))
+                .then(literal("claim")
+                        .executes(ctx -> claimChunk(ctx.getSource())))
+                .then(literal("unclaim")
+                        .executes(ctx -> unclaimChunk(ctx.getSource())))
+                .then(literal("structureprotect")
+                        .executes(ctx -> toggleStructureProtect(ctx.getSource(), true))
+                        .then(literal("on").executes(ctx -> toggleStructureProtect(ctx.getSource(), true)))
+                        .then(literal("off").executes(ctx -> toggleStructureProtect(ctx.getSource(), false))))
+                .then(literal("convert")
+                        .requires(IdlecraftCommand::isDebugOn)
+                        .then(argument("radius", IntegerArgumentType.integer(0, 64))
+                                .executes(ctx -> convertBlocks(ctx.getSource(), IntegerArgumentType.getInteger(ctx, "radius"))))
+                        .executes(ctx -> convertBlocks(ctx.getSource(), 8)))
         );
     }
 
@@ -356,9 +373,15 @@ public class IdlecraftCommand {
             unlocked.remove(id);
             data.clearSacrificeProgress(player.getUUID(), id);
         }
-        data.setStatBase(player.getUUID(), "sticks_picked", 0);
-        data.setStatBase(player.getUUID(), "wood_mined", 0);
-        data.setStatBase(player.getUUID(), "wood_mined_axe", 0);
+        
+        
+        data.clearStatBases(player.getUUID());
+        for (String key : new String[] {
+                "cave_dark_damage", "cave_hunger_damage", "furnace_opened",
+                "food_cooked", "furnace_takes", "crafted_quality", "days_survived"
+        }) {
+            data.setFurnaceCounter(player.getUUID(), key, 0);
+        }
         IdlecraftNetworking.syncNodesToClient(player);
         IdlecraftNetworking.syncSacrificeState(player);
         player.sendSystemMessage(Component.literal("[Idlecraft] Cleared " + toRemove.size()
@@ -375,6 +398,52 @@ public class IdlecraftCommand {
         IdlecraftNetworking.syncNodesToClient(player);
         IdlecraftNetworking.syncSacrificeState(player);
         source.sendSuccess(() -> Component.literal("[Idlecraft] Progress reset."), false);
+        return 1;
+    }
+
+    private static int claimChunk(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendSuccess(() -> Component.literal("[Idlecraft] Run this command in-game."), false);
+            return 0;
+        }
+        ServerLevel level = player.level();
+        ChunkPos chunk = player.chunkPosition();
+        ClaimStore.claim(level, chunk, player.getUUID());
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Claimed chunk " + chunk
+                + ". You may now break/rebuild inside protected structures here."), false);
+        return 1;
+    }
+
+    private static int unclaimChunk(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendSuccess(() -> Component.literal("[Idlecraft] Run this command in-game."), false);
+            return 0;
+        }
+        ServerLevel level = player.level();
+        ChunkPos chunk = player.chunkPosition();
+        ClaimStore.unclaim(level, chunk);
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Unclaimed chunk " + chunk + "."), false);
+        return 1;
+    }
+
+    private static int toggleStructureProtect(CommandSourceStack source, boolean enabled) {
+        io.github.mermagudyan.idlecraft.common.StructureProtection.setProtectionEnabled(enabled);
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Structure protection "
+                + (enabled ? "ENABLED" : "DISABLED") + "."), true);
+        return 1;
+    }
+
+    private static int convertBlocks(CommandSourceStack source, int radius) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendSuccess(() -> Component.literal("[Idlecraft] Run this command in-game."), false);
+            return 0;
+        }
+        int converted = BlockConverter.convertAround(player, radius);
+        source.sendSuccess(() -> Component.literal("[Idlecraft] Converted " + converted
+                + " vanilla workstation block(s) to Idlecraft variants."), true);
         return 1;
     }
 }

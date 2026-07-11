@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.event;
 
+import io.github.mermagudyan.idlecraft.common.ServerTick;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -20,15 +21,12 @@ public class FurnaceUsageTracker {
     public static final String FURNACE_TAKES = "furnace_takes";
     public static final String STONE_LOCK = "stone_lock";
 
-    private static int tickCounter = 0;
     private static final Map<UUID, Boolean> inFurnace = new HashMap<>();
     private static final Map<UUID, Integer> prevOutputCount = new HashMap<>();
 
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            tickCounter++;
-            if (tickCounter < 20) return;
-            tickCounter = 0;
+            if (!ServerTick.every("furnace_usage", 20)) return;
 
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 trackPlayer(player, server);

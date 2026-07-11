@@ -32,6 +32,11 @@ public class ClientState {
     public static int getSelectedQuality() { return selectedQuality; }
     public static void setSelectedQuality(int q) { selectedQuality = q; }
 
+    private static int selectedCraftQuality = 0;
+
+    public static int getSelectedCraftQuality() { return selectedCraftQuality; }
+    public static void setSelectedCraftQuality(int q) { selectedCraftQuality = q; }
+
     public static List<String> getUnlockedNodes() { return new ArrayList<>(unlockedNodes); }
     public static void setUnlockedNodes(List<String> nodes) { unlockedNodes = new ArrayList<>(nodes); }
     public static boolean isUnlocked(String nodeId) { return unlockedNodes.contains(nodeId); }

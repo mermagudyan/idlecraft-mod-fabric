@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
+import io.github.mermagudyan.idlecraft.common.IdlecraftWorkstation;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import net.minecraft.core.Direction;
 import net.minecraft.server.MinecraftServer;
@@ -35,6 +36,8 @@ public abstract class FurnaceInputMixin {
         if (index != 0) return;
         Level level = ((BlockEntity) (Object) this).getLevel();
         if (level == null || level.isClientSide()) return;
+        
+        if (((BlockEntity) (Object) this).getBlockState().getBlock() instanceof IdlecraftWorkstation) return;
         MinecraftServer server = level.getServer();
         if (server == null) return;
 
@@ -49,13 +52,6 @@ public abstract class FurnaceInputMixin {
                         }
                         if (stack.is(net.minecraft.world.item.Items.COPPER_ORE)
                                 && !unlocked.contains("copper_smelting")) {
-                            cir.setReturnValue(false);
-                            return;
-                        }
-                        if (((BlockEntity) (Object) this).getBlockState().getBlock()
-                                instanceof net.minecraft.world.level.block.SmokerBlock
-                                && unlocked.contains("smoking_rack")
-                                && !PlayerData.getServer(server).hasHeldMeat(player.getUUID())) {
                             cir.setReturnValue(false);
                             return;
                         }

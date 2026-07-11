@@ -1,18 +1,19 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
+import io.github.mermagudyan.idlecraft.IdleMod;
 import io.github.mermagudyan.idlecraft.common.QualityComponent;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.ClientState;
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.Container;
+import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AnvilMenu;
 import net.minecraft.world.inventory.DataSlot;
 import net.minecraft.world.inventory.ResultContainer;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.enchantment.Repairable;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -41,59 +42,72 @@ public abstract class AnvilQualityMixin {
         ResultContainer resultSlots = acc.idlecraft$resultSlots();
 
         ItemStack input = inputSlots.getItem(0);
-        ItemStack additional = inputSlots.getItem(1);
         if (input.isEmpty() || !QualityComponent.isEligible(input)) return;
 
-        Repairable rep = input.get(DataComponents.REPAIRABLE);
-        boolean matValid = !additional.isEmpty() && rep != null && rep.isValidRepairItem(additional);
-        if (!matValid) return;
+        int current = QualityComponent.getQuality(input);
+        if (current == QualityComponent.CORRUPTED) return; 
 
         List<String> unlocked = player.level().isClientSide()
                 ? ClientState.getUnlockedNodes()
                 : idlecraft$serverNodes(player);
-        int capLevel = IdlecraftNetworking.maxCraftableQuality(unlocked);
-        if (capLevel < QualityComponent.POOR) return;
+        
+        
+        int capLevel = unlocked.contains("good_caster")
+                ? QualityComponent.SUPERIOR : QualityComponent.NORMAL;
         int capIdx = QualityComponent.tierIndex(capLevel);
 
-        int current = QualityComponent.getQuality(input);
         int currentIdx = QualityComponent.tierIndex(current);
-        if (current == QualityComponent.CORRUPTED) return; // corrupted tools are cleansed at the grindstone, not the anvil
+        if (currentIdx >= capIdx) return; 
 
         int selected = idlecraft$selectedQuality(player);
         int selectedIdx = QualityComponent.tierIndex(selected);
 
-        ItemStack result = resultSlots.getItem(0);
-        boolean canRepair = !result.isEmpty();
-
-        int targetIdx;
-        if (selectedIdx > currentIdx) {
-            targetIdx = selectedIdx;
-        } else {
-            return; // no scroll-up: leave vanilla result untouched (repair only, quality preserved)
-        }
-
-        if (targetIdx > capIdx) return; // cannot forge above the currently available tier
+        
+        
+        int targetIdx = Math.max(currentIdx, selectedIdx);
+        if (targetIdx > capIdx) targetIdx = capIdx;
+        if (targetIdx <= currentIdx) return; 
         if (targetIdx >= QualityComponent.TIERS.length) return;
 
         int targetLevel = QualityComponent.TIERS[targetIdx];
 
-        ItemStack out;
-        if (canRepair) {
-            out = result.copy();
-        } else {
-            out = input.copy();
-            out.setDamageValue(0);
+        
+        
+        
+        
+        ItemStack mat = inputSlots.getItem(1);
+        Item expectedMat = QualityComponent.forgeMaterial(input);
+        int consume = 0;
+        if (expectedMat != null && !mat.isEmpty() && mat.getItem() == expectedMat && mat.getCount() >= 1) {
+            consume = 1;
         }
+        IdleMod.LOGGER.info("[IDLECRAFT][Anvil] forge check inputQ={} selected={} targetIdx={} currentIdx={} capIdx={} mat={} expectedMat={} consume={}",
+                current, selected, targetIdx, currentIdx, capIdx, mat.getItem(), expectedMat, consume);
+
+        ItemStack out = input.copy();
+        out.setDamageValue(0);
         QualityComponent.applyQuality(out, targetLevel);
         resultSlots.setItem(0, out);
+        ((AbstractContainerMenu) (Object) this).broadcastChanges();
 
-        int repairLevel = Math.max(1, cost.get());
-        int extra = (int) Math.ceil((targetLevel - current) * 1.5);
-        cost.set(repairLevel + Math.max(0, extra));
-        if (!canRepair) {
-            repairItemCountCost = 1;
-        }
+        IdleMod.LOGGER.info("[IDLECRAFT][Anvil] forge OK inputQ={} -> targetLevel={} matConsumed={}", current, targetLevel, consume);
+
+        
+        
+        int xpCost = Math.max(1, targetLevel - current);
+        cost.set(xpCost);
+        repairItemCountCost = consume;
         idlecraft$forgeUpgrade = true;
+    }
+
+    @Inject(method = "createResult", at = @At("TAIL"))
+    private void idlecraft$logSlots(CallbackInfo ci) {
+        ItemCombinerMenuAccessor acc = (ItemCombinerMenuAccessor) (Object) this;
+        Container inputSlots = acc.idlecraft$inputSlots();
+        ItemStack in = inputSlots.getItem(0);
+        ItemStack add = inputSlots.getItem(1);
+        IdleMod.LOGGER.info("[IDLECRAFT][Anvil] slotsChanged input={} q={} additional={} q={}",
+                in.getItem(), QualityComponent.getQuality(in), add.getItem(), QualityComponent.getQuality(add));
     }
 
     @Inject(method = "onTake", at = @At("RETURN"))

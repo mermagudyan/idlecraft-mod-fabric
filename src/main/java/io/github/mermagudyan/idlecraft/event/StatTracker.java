@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.event;
 
+import io.github.mermagudyan.idlecraft.common.ServerTick;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -17,13 +18,9 @@ import java.util.Map;
 
 public class StatTracker {
 
-    private static int tickCounter = 0;
-
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            tickCounter++;
-            if (tickCounter < 20) return;
-            tickCounter = 0;
+            if (!ServerTick.every("stat_tracker", 20)) return;
 
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 trackPlayer(player, server);
@@ -95,23 +92,7 @@ public class StatTracker {
         progress.put("cave_hunger_damage", data.getFurnaceCounter(player.getUUID(), "cave_hunger_damage"));
         progress.put("crafted_quality", data.getFurnaceCounter(player.getUUID(), "crafted_quality"));
 
-        for (int i = 0; i < player.getInventory().getContainerSize(); i++) {
-            net.minecraft.world.item.ItemStack stack = player.getInventory().getItem(i);
-            if (!stack.isEmpty() && isMeat(stack.getItem())) {
-                data.setHeldMeat(player.getUUID(), true);
-                break;
-            }
-        }
-
         IdlecraftNetworking.syncConditionProgress(player, progress);
-    }
-
-    private static boolean isMeat(net.minecraft.world.item.Item item) {
-        return item == Items.PORKCHOP || item == Items.BEEF || item == Items.CHICKEN
-                || item == Items.RABBIT || item == Items.COD || item == Items.SALMON
-                || item == Items.MUTTON || item == Items.COOKED_PORKCHOP || item == Items.COOKED_BEEF
-                || item == Items.COOKED_CHICKEN || item == Items.COOKED_RABBIT || item == Items.COOKED_COD
-                || item == Items.COOKED_SALMON || item == Items.COOKED_MUTTON;
     }
 
     public static int getSticksPicked(ServerPlayer player) {

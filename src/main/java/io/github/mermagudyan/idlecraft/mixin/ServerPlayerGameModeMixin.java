@@ -1,6 +1,6 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
-import io.github.mermagudyan.idlecraft.event.PlayerPlacedTracker;
+import io.github.mermagudyan.idlecraft.common.StructureProtection;
 import io.github.mermagudyan.idlecraft.network.StructureBlockedPayload;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 import net.minecraft.core.BlockPos;
@@ -27,8 +27,7 @@ public abstract class ServerPlayerGameModeMixin {
         if (player == null || player.isCreative() || player.isSpectator()) return;
 
         ServerLevel level = (ServerLevel) player.level();
-        if (!level.structureManager().getStructureWithPieceAt(pos, s -> true).isValid()) return;
-        if (PlayerPlacedTracker.isPlayerPlaced(level, pos)) return;
+        if (!StructureProtection.isProtected(level, player, pos)) return;
 
         ServerPlayNetworking.send(player, new StructureBlockedPayload(pos));
     }

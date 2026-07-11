@@ -28,7 +28,6 @@ public class PlayerData extends SavedData {
     private final Map<UUID, Map<String, Integer>> furnaceCounters = new HashMap<>();
     private final Map<UUID, Map<String, Long>> repairStart = new HashMap<>();
     private final Map<UUID, Map<String, Boolean>> repairSucceeded = new HashMap<>();
-    private final Map<UUID, Boolean> heldMeat = new HashMap<>();
 
     public PlayerData() {}
 
@@ -38,8 +37,7 @@ public class PlayerData extends SavedData {
                       Map<String, Boolean> debug, Map<String, Long> branchLockUntil,
                       Map<String, Map<String, Integer>> furnaceCounters,
                       Map<String, Map<String, Long>> repairStart,
-                      Map<String, Map<String, Boolean>> repairSucceeded,
-                      Map<String, Boolean> heldMeat) {
+                       Map<String, Map<String, Boolean>> repairSucceeded) {
         pts.forEach((k, v) -> this.points.put(UUID.fromString(k), v));
         nodes.forEach((k, v) -> this.unlockedNodes.put(UUID.fromString(k), v));
         rewarded.forEach((k, v) -> {
@@ -58,7 +56,6 @@ public class PlayerData extends SavedData {
         furnaceCounters.forEach((k, v) -> this.furnaceCounters.put(UUID.fromString(k), new HashMap<>(v)));
         repairStart.forEach((k, v) -> this.repairStart.put(UUID.fromString(k), new HashMap<>(v)));
         repairSucceeded.forEach((k, v) -> this.repairSucceeded.put(UUID.fromString(k), new HashMap<>(v)));
-        heldMeat.forEach((k, v) -> this.heldMeat.put(UUID.fromString(k), v));
     }
 
     public static final Codec<PlayerData> CODEC = RecordCodecBuilder.create(instance ->
@@ -98,10 +95,7 @@ public class PlayerData extends SavedData {
                             .forGetter(d -> toStringMap2Long(d.repairStart)),
                      Codec.unboundedMap(Codec.STRING, Codec.unboundedMap(Codec.STRING, Codec.BOOL))
                             .optionalFieldOf("repairSucceeded", Map.of())
-                            .forGetter(d -> toStringMapBoolMap(d.repairSucceeded)),
-                     Codec.unboundedMap(Codec.STRING, Codec.BOOL)
-                            .optionalFieldOf("heldMeat", Map.of())
-                            .forGetter(d -> toStringMapBool(d.heldMeat))
+                            .forGetter(d -> toStringMapBoolMap(d.repairSucceeded))
             ).apply(instance, PlayerData::new)
     );
 
@@ -274,7 +268,6 @@ public class PlayerData extends SavedData {
         branchLockUntil.remove(id);
         repairStart.remove(id);
         repairSucceeded.remove(id);
-        heldMeat.remove(id);
         setDirty();
     }
 
@@ -344,15 +337,6 @@ public class PlayerData extends SavedData {
     public void clearRepair(UUID id) {
         repairStart.remove(id);
         repairSucceeded.remove(id);
-        setDirty();
-    }
-
-    public boolean hasHeldMeat(UUID id) {
-        return heldMeat.getOrDefault(id, false);
-    }
-
-    public void setHeldMeat(UUID id, boolean value) {
-        heldMeat.put(id, value);
         setDirty();
     }
 }

@@ -358,7 +358,7 @@ public class IdlecraftScreen extends Screen {
             pressedNode = n;
             holdProgress = 0.0f;
         } else {
-            // Condition not met or sacrifice incomplete: always play the centring animation.
+            
             startCameraAnim(n.x, n.y);
             if (!n.sacrifices.isEmpty()) {
                 if (n.repairSeconds > 0 && isSacrificeComplete(n) && !ClientState.isRepairSucceeded(n.id)) {
@@ -517,7 +517,7 @@ public class IdlecraftScreen extends Screen {
                     holdProgress = 0.0f;
                 }
             } else if (animatingCamera) {
-                // wait until camera finishes centering before counting the hold
+                
             } else {
                 pressedNode = null;
                 holdProgress = 0.0f;

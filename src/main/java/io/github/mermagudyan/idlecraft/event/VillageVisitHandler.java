@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.event;
 
+import io.github.mermagudyan.idlecraft.common.ServerTick;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
@@ -14,13 +15,9 @@ import java.util.Map;
 
 public class VillageVisitHandler {
 
-    private static int tickCounter = 0;
-
     public static void register() {
         ServerTickEvents.END_SERVER_TICK.register(server -> {
-            tickCounter++;
-            if (tickCounter < 40) return;
-            tickCounter = 0;
+            if (!ServerTick.every("village_visit", 40)) return;
 
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 checkVillageProximity(player, server);

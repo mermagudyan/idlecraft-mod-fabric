@@ -1,0 +1,6 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": ["BBB","BIB","BBB"],
+  "key": {"B": {"item": "minecraft:iron_block"}, "I": {"item": "minecraft:iron_ingot"}},
+  "result": {"id": "idlecraft:anvil"}
+}

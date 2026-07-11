@@ -50,9 +50,21 @@ public class IdlecraftNetworking {
                     if (server == null) return;
                     server.execute(() -> {
                         PlayerData data = PlayerData.getServer(server);
-                        int cap = maxCraftableQuality(data.getUnlockedNodes(player.getUUID()));
+                        int cap;
+                        String key;
+                        if (player.containerMenu instanceof AnvilMenu) {
+                            
+                            
+                            cap = data.getUnlockedNodes(player.getUUID()).contains("good_caster")
+                                    ? io.github.mermagudyan.idlecraft.common.QualityComponent.SUPERIOR
+                                    : io.github.mermagudyan.idlecraft.common.QualityComponent.NORMAL;
+                            key = "selected_quality";
+                        } else {
+                            cap = maxCraftableQuality(data.getUnlockedNodes(player.getUUID()));
+                            key = "craft_quality";
+                        }
                         int q = Math.max(0, Math.min(payload.quality(), Math.max(0, cap)));
-                        data.setFurnaceCounter(player.getUUID(), "selected_quality", q);
+                        data.setFurnaceCounter(player.getUUID(), key, q);
                         if (player.containerMenu instanceof AnvilMenu anvilMenu) {
                             anvilMenu.slotsChanged(
                                     ((ItemCombinerMenuAccessor) (Object) anvilMenu).idlecraft$inputSlots());
@@ -323,10 +335,6 @@ public class IdlecraftNetworking {
                         data.setPoints(player.getUUID(), currentPoints - cost);
                         data.unlockNode(player.getUUID(), nodeId);
 
-                        if ("burning_knowledge".equals(nodeId)) {
-                            io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = true;
-                        }
-
                         if ("stone_tools".equals(nodeId) || "durability".equals(nodeId)) {
                             data.setBranchLockUntil(player.getUUID(), System.currentTimeMillis() + 5L * 60L * 1000L);
                         }
@@ -481,7 +489,6 @@ public class IdlecraftNetworking {
             if (c < r.amount()) { allMet = false; break; }
         }
         if (allMet) {
-            if ("burning_knowledge".equals(nodeId)) io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = true;
             if (node.repairSeconds > 0) {
                 data.setRepairStart(player.getUUID(), nodeId, System.currentTimeMillis());
             }
@@ -541,8 +548,17 @@ public class IdlecraftNetworking {
         MinecraftServer server = player.level().getServer();
         if (server == null) return;
         List<String> nodes = PlayerData.getServer(server).getUnlockedNodes(player.getUUID());
-        io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = nodes.contains("burning_knowledge");
-        io.github.mermagudyan.idlecraft.common.FurnaceState.enhancedSmelting = nodes.contains("enhanced_smelting");
+
+        
+        
+        
+        boolean bk = server.getPlayerList().getPlayers().stream()
+                .anyMatch(p -> PlayerData.getServer(server).getUnlockedNodes(p.getUUID()).contains("burning_knowledge"));
+        boolean es = server.getPlayerList().getPlayers().stream()
+                .anyMatch(p -> PlayerData.getServer(server).getUnlockedNodes(p.getUUID()).contains("enhanced_smelting"));
+        io.github.mermagudyan.idlecraft.common.FurnaceState.burningKnowledge = bk;
+        io.github.mermagudyan.idlecraft.common.FurnaceState.enhancedSmelting = es;
+
         ServerPlayNetworking.send(player, new NodesSyncPayload(nodes));
     }
 

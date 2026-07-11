@@ -1,9 +1,7 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
+import io.github.mermagudyan.idlecraft.IdleMod;
 import io.github.mermagudyan.idlecraft.common.QualityComponent;
-import io.github.mermagudyan.idlecraft.data.PlayerData;
-import io.github.mermagudyan.idlecraft.network.IdlecraftNetworking;
-import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.CraftingMenu;
@@ -25,20 +23,19 @@ public abstract class CraftingQualityPreviewMixin {
         if (player.level().isClientSide()) return;
 
         ItemStack result = ((CraftingMenu) (Object) this).getResultSlot().getItem();
+
+        StringBuilder grid = new StringBuilder();
+        for (int i = 1; i <= 9; i++) {
+            ItemStack s = ((CraftingMenu) (Object) this).getSlot(i).getItem();
+            if (!s.isEmpty()) grid.append(s.getItem().toString()).append("(q=").append(QualityComponent.getQuality(s)).append(") ");
+        }
+        IdleMod.LOGGER.info("[IDLECRAFT][Crafting] grid=[{}] result={}", grid, result.getItem());
+
         if (result.isEmpty() || !QualityComponent.isEligible(result)) return;
 
-        MinecraftServer server = player.level().getServer();
-        if (server == null) return;
-
-        PlayerData data = PlayerData.getServer(server);
-        var unlocked = data.getUnlockedNodes(player.getUUID());
-        int cap = IdlecraftNetworking.maxCraftableQuality(unlocked);
-        int level = data.getFurnaceCounter(player.getUUID(), "selected_quality");
-        level = Math.max(QualityComponent.POOR, Math.min(level, cap));
-
-        Integer cur = result.get(QualityComponent.QUALITY);
-        if (cur == null || cur != level) {
-            QualityComponent.applyQuality(result, level);
-        }
+        
+        
+        
+        IdleMod.LOGGER.info("[IDLECRAFT][Crafting] preview result={} (quality assigned on take)", result.getItem());
     }
 }

@@ -1,5 +1,6 @@
 package io.github.mermagudyan.idlecraft.mixin;
 
+import io.github.mermagudyan.idlecraft.IdleMod;
 import io.github.mermagudyan.idlecraft.common.QualityComponent;
 import io.github.mermagudyan.idlecraft.data.PlayerData;
 import net.minecraft.server.MinecraftServer;
@@ -29,20 +30,24 @@ public abstract class CraftingResultSlotOnTakeMixin {
         var unlocked = data.getUnlockedNodes(sp.getUUID());
 
         int cap = unlocked.contains("good_caster") ? QualityComponent.NORMAL : QualityComponent.POOR;
-        int level = data.getFurnaceCounter(sp.getUUID(), "selected_quality");
+        int level = data.getFurnaceCounter(sp.getUUID(), "craft_quality");
         level = Math.max(QualityComponent.POOR, Math.min(level, cap));
 
         int xpCost = level;
+        IdleMod.LOGGER.info("[IDLECRAFT][CraftingTake] selected={} level={} xpCost={} playerXP={} hasGoodCaster={}",
+                data.getFurnaceCounter(sp.getUUID(), "craft_quality"), level, xpCost, sp.experienceLevel,
+                unlocked.contains("good_caster"));
         if (xpCost > 0 && !sp.isCreative()) {
             if (sp.experienceLevel < xpCost) {
                 level = QualityComponent.POOR;
+                QualityComponent.applyQuality(stack, level);
+                stack.setDamageValue(0);
+                IdleMod.LOGGER.info("[IDLECRAFT][CraftingTake] not enough XP, forced POOR");
             } else {
                 sp.giveExperienceLevels(-xpCost);
+                IdleMod.LOGGER.info("[IDLECRAFT][CraftingTake] charged {} XP, final quality={}", xpCost, QualityComponent.getQuality(stack));
             }
         }
-
-        QualityComponent.applyQuality(stack, level);
-        stack.setDamageValue(0);
 
         data.setFurnaceCounter(sp.getUUID(), "crafted_quality", 1);
     }
